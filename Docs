@@ -1,0 +1,944 @@
+# Anoneurx Authenticator — Backend Architecture Documentation
+
+## 1. Overview
+
+**Anoneurx Authenticator** is designed as an **offline-first, zero-cloud authenticator**.
+
+The application does not require an Anoneurx account, backend server, database, or Internet connection to generate authentication codes.
+
+Its core principle is:
+
+> **Authentication secrets belong to the user and remain under the user's control.**
+
+The application stores encrypted authenticator data locally and allows the user to manually create an encrypted backup that can be transferred to another device.
+
+---
+
+## 2. High-Level Architecture
+
+```text
+                    ANONEURX AUTHENTICATOR
+                           │
+              ┌────────────┴────────────┐
+              │                         │
+        Application Layer          Security Layer
+              │                         │
+       ┌──────┴──────┐           ┌──────┴──────┐
+       │             │           │             │
+   TOTP Engine   Account UI   Vault Manager  Crypto
+       │             │           │             │
+       └──────┬──────┘           └──────┬──────┘
+              │                         │
+              └────────────┬────────────┘
+                           │
+                    Local Storage
+                           │
+                    Encrypted Vault
+                           │
+              ┌────────────┴────────────┐
+              │                         │
+        Local Device                Backup File
+                                      │
+                              Manual Transfer Only
+```
+
+There is **no required backend server**.
+
+---
+
+# 3. Backend Philosophy
+
+Traditional authentication applications may use:
+
+```text
+Application
+     ↓
+Internet
+     ↓
+API Server
+     ↓
+Database
+```
+
+Anoneurx Authenticator should instead use:
+
+```text
+Application
+     ↓
+Local Security Layer
+     ↓
+Encrypted Vault
+     ↓
+Device Storage
+```
+
+Therefore:
+
+```text
+Internet = Not Required
+Cloud Database = None
+User Account = None
+Authentication Server = None
+Secret Synchronization = None
+```
+
+---
+
+# 4. Core Components
+
+The application backend consists of the following logical modules.
+
+### 4.1 TOTP Engine
+
+Responsible for generating one-time passwords.
+
+Input:
+
+```text
+TOTP Secret
+Current Time
+Algorithm
+Digits
+Period
+```
+
+Output:
+
+```text
+6-digit / 8-digit OTP
+```
+
+Example:
+
+```text
+Secret
+   +
+Current Unix Time
+   ↓
+HMAC
+   ↓
+Dynamic Truncation
+   ↓
+OTP
+```
+
+The TOTP engine does **not need Internet access**.
+
+The device clock is sufficient.
+
+---
+
+# 5. Vault Manager
+
+The Vault Manager controls all authenticator secrets.
+
+Responsibilities:
+
+* Create vault
+* Open vault
+* Lock vault
+* Add account
+* Update account
+* Delete account
+* Read account
+* Save vault
+* Export backup
+* Import backup
+
+Conceptually:
+
+```text
+                 Vault Manager
+                      │
+       ┌──────────────┼──────────────┐
+       │              │              │
+     Create          Read           Write
+       │              │              │
+       └──────────────┼──────────────┘
+                      │
+                Encryption Layer
+                      │
+                Local File System
+```
+
+---
+
+# 6. Encrypted Vault
+
+The user's authenticator data should never be stored as plaintext.
+
+Instead of:
+
+```json
+{
+  "service": "GitHub",
+  "secret": "JBSWY3DPEHPK3PXP"
+}
+```
+
+the disk should contain encrypted data.
+
+Conceptually:
+
+```text
+User Data
+   ↓
+Serialization
+   ↓
+Encryption
+   ↓
+Authenticated Ciphertext
+   ↓
+Vault File
+```
+
+A vault could use a dedicated file such as:
+
+```text
+authenticator.aax
+```
+
+---
+
+# 7. Vault Structure
+
+A logical decrypted vault could contain:
+
+```json
+{
+  "version": 1,
+  "accounts": [
+    {
+      "id": "...",
+      "issuer": "GitHub",
+      "account": "user@example.com",
+      "secret": "...",
+      "algorithm": "SHA1",
+      "digits": 6,
+      "period": 30
+    }
+  ]
+}
+```
+
+However, **this structure should exist only in memory while the vault is unlocked**.
+
+On disk:
+
+```text
+authenticator.aax
+        ↓
+encrypted binary data
+```
+
+---
+
+# 8. Encryption Architecture
+
+The security architecture should separate:
+
+### Authentication
+
+Used to determine whether the user can unlock the application.
+
+Examples:
+
+* Device biometric authentication
+* Device PIN
+* Application PIN/password
+
+### Encryption
+
+Used to protect the actual vault.
+
+These should not be treated as the same thing.
+
+Recommended conceptual model:
+
+```text
+             User Authentication
+                    │
+          ┌─────────┴─────────┐
+          │                   │
+     Biometrics             PIN
+          │                   │
+          └─────────┬─────────┘
+                    ↓
+             Secure Key Access
+                    ↓
+             Vault Encryption Key
+                    ↓
+              Encrypted Vault
+```
+
+On supported platforms, use the operating system's secure key storage rather than implementing biometric storage yourself.
+
+---
+
+# 9. Cryptographic Layer
+
+The application should use established cryptographic primitives rather than custom encryption.
+
+Recommended design:
+
+```text
+Password
+   ↓
+Argon2id
+   ↓
+Derived Key
+   ↓
+AEAD Encryption
+   ↓
+Encrypted Vault
+```
+
+Possible AEAD choices:
+
+* AES-256-GCM
+* XChaCha20-Poly1305
+
+The encryption must provide both:
+
+1. **Confidentiality**
+2. **Integrity/authentication**
+
+This prevents an attacker from simply modifying the vault without detection.
+
+---
+
+# 10. Vault Encryption
+
+Conceptually:
+
+```text
+                 Plain Vault
+                      │
+                      ▼
+               Serialize Data
+                      │
+                      ▼
+               Generate Nonce
+                      │
+                      ▼
+                 AEAD Encrypt
+                      │
+             ┌────────┴────────┐
+             │                 │
+        Ciphertext         Authentication
+                              Tag
+             │                 │
+             └────────┬────────┘
+                      ▼
+                 Vault File
+```
+
+The encryption key must never be stored alongside the plaintext vault.
+
+---
+
+# 11. Adding a New Authenticator
+
+When the user scans a QR code:
+
+```text
+QR Code
+   ↓
+otpauth:// URI
+   ↓
+Parser
+   ↓
+Validate Parameters
+   ↓
+Create Account Object
+   ↓
+Vault Manager
+   ↓
+Encrypt Vault
+   ↓
+Write File
+```
+
+Example URI:
+
+```text
+otpauth://totp/GitHub:user@example.com?secret=...&issuer=GitHub
+```
+
+The secret is extracted locally.
+
+There is no API request.
+
+---
+
+# 12. Saving a New Account
+
+The sequence should be:
+
+```text
+User scans QR
+      ↓
+QR parser
+      ↓
+TOTP configuration
+      ↓
+User confirms account
+      ↓
+Vault unlocked
+      ↓
+Account added
+      ↓
+Vault re-encrypted
+      ↓
+Atomic file replacement
+      ↓
+Vault locked
+```
+
+The application should avoid leaving an unencrypted temporary vault on disk.
+
+---
+
+# 13. Generating OTP Codes
+
+When the user opens an account:
+
+```text
+Encrypted Vault
+      ↓
+Authenticate user
+      ↓
+Decrypt vault in memory
+      ↓
+Read TOTP secret
+      ↓
+Current system time
+      ↓
+TOTP algorithm
+      ↓
+Generate OTP
+      ↓
+Display OTP
+```
+
+Example:
+
+```text
+GitHub
+●●● ●●●
+
+Expires in 18 seconds
+```
+
+The generated OTP does not need to be sent anywhere.
+
+---
+
+# 14. Memory Security
+
+The application should minimize the lifetime of sensitive information in memory.
+
+When the vault is locked:
+
+```text
+Vault key
+TOTP secrets
+Decrypted account database
+```
+
+should no longer remain unnecessarily available in application memory.
+
+Where the programming environment allows it, sensitive buffers should be cleared after use.
+
+The application should also avoid:
+
+* Logging secrets
+* Debug-printing secrets
+* Crash-reporting secrets
+* Clipboard retention longer than necessary
+* Writing secrets into temporary files
+
+---
+
+# 15. Backup Architecture
+
+The backup system is one of the most important components.
+
+The user selects:
+
+**Settings → Export Backup**
+
+Then:
+
+```text
+Encrypted Vault
+      ↓
+Backup Manager
+      ↓
+Generate backup package
+      ↓
+Encrypt / authenticate
+      ↓
+.aax backup
+      ↓
+User chooses storage
+```
+
+The application itself does not upload the backup.
+
+The user can manually store it on:
+
+* USB
+* External storage
+* Personal cloud storage
+* Another computer
+* Another phone
+
+The backup remains encrypted.
+
+---
+
+# 16. Backup File
+
+Example:
+
+```text
+Anoneurx-Authenticator-Backup.aax
+```
+
+Logical structure:
+
+```text
+AAX
+├── Magic
+├── Version
+├── KDF Parameters
+├── Salt
+├── Encryption Parameters
+├── Nonce
+├── Ciphertext
+└── Authentication Tag
+```
+
+The exact binary format should be formally versioned.
+
+This allows future versions of the application to migrate old backups.
+
+---
+
+# 17. Backup Restoration
+
+On a new device:
+
+```text
+Install Anoneurx Authenticator
+             ↓
+       Import Backup
+             ↓
+       Select .aax
+             ↓
+       Enter Password
+             ↓
+          Verify
+             ↓
+       Decrypt Vault
+             ↓
+       Validate Data
+             ↓
+       Import Accounts
+             ↓
+       Re-encrypt locally
+             ↓
+       New Device Vault
+```
+
+No Anoneurx server is involved.
+
+---
+
+# 18. Device Migration
+
+Example:
+
+```text
+             OLD DEVICE
+                 │
+                 │
+        Export encrypted vault
+                 │
+                 ▼
+          Backup.aax
+                 │
+        USB / Files / etc.
+                 │
+                 ▼
+             NEW DEVICE
+                 │
+          Import Backup
+                 │
+                 ▼
+         Enter backup password
+                 │
+                 ▼
+          Restore accounts
+```
+
+This makes the application independent of a central Anoneurx account.
+
+---
+
+# 19. No Cloud Synchronization
+
+Anoneurx Authenticator should deliberately **not** implement:
+
+```text
+Phone A
+   ↓
+Anoneurx Cloud
+   ↓
+Phone B
+```
+
+Instead:
+
+```text
+Phone A
+   ↓
+Encrypted Backup
+   ↓
+User-controlled transfer
+   ↓
+Phone B
+```
+
+This greatly reduces the attack surface.
+
+---
+
+# 20. Offline Network Policy
+
+For the strongest privacy architecture, the application should not require networking at runtime.
+
+Ideally:
+
+```text
+Network Permission
+        │
+        ▼
+       NONE
+```
+
+The application should not depend on:
+
+* Authentication APIs
+* Cloud databases
+* Analytics servers
+* Remote configuration
+* Telemetry
+* Advertising SDKs
+
+This also means the application can function in airplane mode.
+
+---
+
+# 21. Threat Model
+
+The architecture should explicitly consider:
+
+### Threat 1 — Cloud database breach
+
+Mitigation:
+
+```text
+No cloud database
+```
+
+### Threat 2 — Server compromise
+
+Mitigation:
+
+```text
+No authentication backend
+No secret API
+```
+
+### Threat 3 — Network interception
+
+Mitigation:
+
+```text
+No network communication required
+```
+
+### Threat 4 — Stolen backup
+
+Mitigation:
+
+```text
+Strong password
++
+KDF
++
+Authenticated encryption
+```
+
+### Threat 5 — Lost phone
+
+Mitigation:
+
+```text
+Encrypted local vault
++
+Manual encrypted backup
+```
+
+### Threat 6 — Modified backup
+
+Mitigation:
+
+```text
+AEAD authentication
+```
+
+The application should refuse to import a corrupted or tampered vault.
+
+---
+
+# 22. What the Application Should Never Store
+
+Never persist:
+
+```text
+Plain TOTP secrets
+Plain backup passwords
+Biometric templates
+User passwords
+Raw encryption keys
+OTP history
+Authentication logs containing secrets
+```
+
+Avoid unnecessary metadata as well.
+
+For example, there is generally no reason for the application to maintain a history like:
+
+```text
+GitHub → OTP 382921 → 02:31
+```
+
+---
+
+# 23. Recommended Project Architecture
+
+A clean implementation could look like:
+
+```text
+anoneurx-authenticator/
+│
+├── core/
+│   ├── totp/
+│   ├── hotp/
+│   ├── otp_uri/
+│   └── account/
+│
+├── crypto/
+│   ├── kdf/
+│   ├── encryption/
+│   ├── key_manager/
+│   └── secure_memory/
+│
+├── vault/
+│   ├── vault_manager/
+│   ├── vault_format/
+│   ├── vault_reader/
+│   └── vault_writer/
+│
+├── backup/
+│   ├── exporter/
+│   ├── importer/
+│   └── format/
+│
+├── platform/
+│   ├── android/
+│   ├── ios/
+│   ├── linux/
+│   ├── windows/
+│   └── macos/
+│
+├── storage/
+│   └── filesystem/
+│
+└── ui/
+    ├── accounts/
+    ├── scanner/
+    ├── vault/
+    ├── settings/
+    └── backup/
+```
+
+---
+
+# 24. Recommended Data Flow
+
+### Add Account
+
+```text
+QR Scanner
+    ↓
+OTP URI Parser
+    ↓
+Account Validator
+    ↓
+Vault Manager
+    ↓
+Crypto Layer
+    ↓
+Encrypted File
+```
+
+### Generate OTP
+
+```text
+Encrypted File
+    ↓
+Vault Unlock
+    ↓
+Decrypt in Memory
+    ↓
+TOTP Engine
+    ↓
+OTP
+```
+
+### Backup
+
+```text
+Encrypted Vault
+    ↓
+Backup Manager
+    ↓
+Backup File
+    ↓
+User-controlled storage
+```
+
+### Restore
+
+```text
+Backup File
+    ↓
+Authentication
+    ↓
+Decrypt
+    ↓
+Validate
+    ↓
+Vault Manager
+    ↓
+New Encrypted Vault
+```
+
+---
+
+# 25. Backend vs Server
+
+For this product, I would actually avoid calling it a traditional **backend**.
+
+The more accurate architecture is:
+
+> **Local Security Backend**
+
+Because the security-critical backend runs entirely on the user's device.
+
+```text
+             Anoneurx Authenticator
+                     │
+        ┌────────────┴────────────┐
+        │                         │
+     Frontend                Local Backend
+        │                         │
+        │                 ┌───────┴────────┐
+        │                 │                │
+        │              Vault            Crypto
+        │                 │                │
+        │                 └───────┬────────┘
+        │                         │
+        └─────────────────────────┤
+                                  │
+                           Local Encrypted
+                              Storage
+```
+
+**No remote backend is required.**
+
+---
+
+# 26. Recommended Technology
+
+If you want this to become a serious security product, I would strongly consider:
+
+### Core
+
+**Rust**
+
+Because you already work with Rust and it is well suited for the security-sensitive core.
+
+```text
+Rust Core
+   │
+   ├── TOTP
+   ├── Vault
+   ├── Crypto
+   ├── Backup
+   └── Serialization
+```
+
+Then expose the core to the UI/platform layer.
+
+For example:
+
+```text
+             Rust Security Core
+                    │
+        ┌───────────┼───────────┐
+        ↓           ↓           ↓
+     Android       iOS       Desktop
+```
+
+This also gives you one cryptographic implementation instead of independently implementing security logic for every platform.
+
+---
+
+# 27. Most Important Design Rule
+
+The fundamental rule for Anoneurx Authenticator should be:
+
+> **The application must never need to know the user's TOTP secrets.**
+
+Only the user's device should handle them.
+
+Therefore:
+
+```text
+                    INTERNET
+                       X
+                       │
+              ┌────────┴────────┐
+              │                 │
+         Anoneurx Cloud      Database
+              │                 │
+              └─────── X ──────┘
+
+
+              USER DEVICE
+                   │
+           ┌───────┴────────┐
+           │                │
+        TOTP Engine     Encrypted Vault
+           │                │
+           └───────┬────────┘
+                   │
+             Device Storage
+```
+
+That architecture gives **Anoneurx Authenticator** a very clear privacy proposition: **no account, no cloud vault, no synchronization server, and no Internet dependency for generating or managing authentication codes.**

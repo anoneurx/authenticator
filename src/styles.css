@@ -1,0 +1,200 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@font-face {
+  font-family: "Anurati";
+  src: url("./assets/fonts/Anurati-Regular.woff") format("woff");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
+ * Anoneurx Authenticator design system.
+ * Dark-first, near-black surfaces, neutral grays, restrained blue accent.
+ * All color values use oklch.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-anurati: "Anurati", ui-sans-serif, system-ui, sans-serif;
+  --shadow-elevated: 0 1px 0 0 oklch(1 0 0 / 4%) inset, 0 16px 40px -24px oklch(0 0 0 / 80%);
+}
+
+/* Dark-first: :root is the dark theme. */
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.16 0.006 265);
+  --foreground: oklch(0.97 0.002 265);
+  --surface: oklch(0.19 0.006 265);
+  --surface-raised: oklch(0.225 0.007 265);
+  --card: oklch(0.205 0.006 265);
+  --card-foreground: oklch(0.97 0.002 265);
+  --popover: oklch(0.205 0.006 265);
+  --popover-foreground: oklch(0.97 0.002 265);
+  --primary: oklch(0.62 0.16 253);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.26 0.007 265);
+  --secondary-foreground: oklch(0.95 0.002 265);
+  --muted: oklch(0.25 0.006 265);
+  --muted-foreground: oklch(0.68 0.012 265);
+  --accent: oklch(0.28 0.02 253);
+  --accent-foreground: oklch(0.96 0.002 265);
+  --destructive: oklch(0.58 0.19 24);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.72 0.15 158);
+  --success-foreground: oklch(0.16 0.006 265);
+  --warning: oklch(0.78 0.14 78);
+  --warning-foreground: oklch(0.16 0.006 265);
+  --border: oklch(0.28 0.007 265);
+  --border-strong: oklch(0.36 0.008 265);
+  --input: oklch(0.3 0.007 265);
+  --ring: oklch(0.62 0.16 253);
+  --sidebar: oklch(0.14 0.006 265);
+  --sidebar-foreground: oklch(0.9 0.003 265);
+  --sidebar-primary: oklch(0.62 0.16 253);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.23 0.007 265);
+  --sidebar-accent-foreground: oklch(0.97 0.002 265);
+  --sidebar-border: oklch(0.24 0.007 265);
+  --sidebar-ring: oklch(0.62 0.16 253);
+}
+
+.theme-light {
+  --background: oklch(0.985 0.001 265);
+  --foreground: oklch(0.18 0.006 265);
+  --surface: oklch(1 0 0);
+  --surface-raised: oklch(0.975 0.002 265);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.006 265);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.006 265);
+  --primary: oklch(0.52 0.17 253);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.955 0.003 265);
+  --secondary-foreground: oklch(0.22 0.006 265);
+  --muted: oklch(0.955 0.003 265);
+  --muted-foreground: oklch(0.47 0.012 265);
+  --accent: oklch(0.94 0.02 253);
+  --accent-foreground: oklch(0.25 0.03 253);
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.55 0.14 158);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.66 0.14 70);
+  --warning-foreground: oklch(0.99 0 0);
+  --border: oklch(0.9 0.003 265);
+  --border-strong: oklch(0.82 0.004 265);
+  --input: oklch(0.89 0.003 265);
+  --ring: oklch(0.52 0.17 253);
+  --sidebar: oklch(0.97 0.002 265);
+  --sidebar-foreground: oklch(0.22 0.006 265);
+  --sidebar-primary: oklch(0.52 0.17 253);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.93 0.004 265);
+  --sidebar-accent-foreground: oklch(0.2 0.006 265);
+  --sidebar-border: oklch(0.9 0.003 265);
+  --sidebar-ring: oklch(0.52 0.17 253);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv01", "ss01";
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+@utility otp-digits {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+@utility font-anurati {
+  font-family: "Anurati", var(--font-display);
+}
+
+@utility hairline {
+  border: 1px solid var(--color-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
