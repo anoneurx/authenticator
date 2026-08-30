@@ -42,24 +42,6 @@ function isDarkOrWhiteHex(hex: string): boolean {
   );
 }
 
-/* =========================================================
-   TIER 1 — LIVE SIMPLE-ICONS LOOKUP
-   -----------------------------------------------------------
-   simple-icons ships each icon with a stable `slug` field —
-   matching on that directly (rather than parsing export names
-   or fuzzy-matching titles) is the reliable way to look icons
-   up, and stays correct across package upgrades.
-
-   NOT every brand is in the package. Some companies have had
-   their marks removed on request (trademark takedowns).
-   Confirmed missing as of the installed version: Amazon, AWS,
-   Adobe, Slack, Microsoft, OpenAI, Canva, Monday.com, Twilio,
-   Heroku, Xbox, Nintendo, FastMail, Kraken, Bybit, MetaMask,
-   Payoneer. Those are handled by tiers 2 and 3 below. Google's
-   SVG is also handled separately (see googleSvg below) to
-   render the real four-color mark instead of simple-icons'
-   flat single-hue version.
-   ========================================================= */
 
 type SimpleIcon = { path: string; hex: string; title: string; slug: string };
 
@@ -87,21 +69,6 @@ function renderFlatIcon(path: string, hex: string, title: string, sz: string) {
     </svg>
   );
 }
-
-/* =========================================================
-   TIER 2 — ARCHIVED SIMPLE-ICONS DATA / MULTI-COLOR OVERRIDES
-   -----------------------------------------------------------
-   These brands used to ship in simple-icons and were later
-   removed from the live package (or need a real multi-color
-   render, e.g. Google, Xbox, Nintendo). The `path` values below
-   were pulled directly from the last simple-icons release that
-   still included them (real traced vectors, not hand-drawn),
-   with two color corrections verified against current brand
-   guidelines: OpenAI's mark is black (#000000) — the green is
-   ChatGPT's UI accent, not the company logo — and Nintendo's
-   circular favicon mark below is a hand-approximated stand-in
-   (see note), not a traced vector.
-   ========================================================= */
 
 const archivedIcon = (path: string, hex: string, title: string) => (sz: string) =>
   renderFlatIcon(path, hex, title, sz);
@@ -190,10 +157,6 @@ const googleSvg = (sz: string) => (
   </svg>
 );
 
-/* Xbox — confirmed against an official reference screenshot: white
-   background, an unfilled green circle outline (not a filled orb), and a
-   green "X" made of two crossing tapered swooshes. Replaces the earlier
-   filled-sphere approximation. */
 const xboxSvg = (sz: string) => (
   <svg viewBox="0 0 24 24" className={sz} role="img" aria-label="Xbox">
     <circle cx="12" cy="12" r="11" fill="#FFFFFF" />
@@ -205,8 +168,7 @@ const xboxSvg = (sz: string) => (
   </svg>
 );
 
-/* Nintendo — still an unverified hand-approximation. No clean unobstructed
-   reference confirmed yet; send one and this will be corrected. */
+
 const nintendoSvg = (sz: string) => (
   <svg viewBox="0 0 24 24" className={sz} role="img" aria-label="Nintendo (approximation)">
     <circle cx="12" cy="12" r="12" fill="#E60012" />
@@ -217,19 +179,7 @@ const nintendoSvg = (sz: string) => (
   </svg>
 );
 
-/* =========================================================
-   TIER 3 — STYLIZED APPROXIMATIONS
-   -----------------------------------------------------------
-   Monday.com and Payoneer below are now confirmed matches
-   against an official reference screenshot (no background
-   circle — the mark sits directly on the card). FastMail,
-   Kraken, Bybit, and MetaMask are still best-effort stand-ins;
-   Kraken has since been confirmed too (see note below).
-   ========================================================= */
 
-/* Monday.com — confirmed against reference: two diagonal rounded bars
-   (shorter pink, taller yellow) plus a small green dot, no background
-   shape at all. Replaces the earlier four-color pinwheel-in-circle. */
 const mondaySvg = (sz: string) => (
   <svg viewBox="0 0 24 24" className={sz} role="img" aria-label="Monday.com">
     <path stroke="#FF3D57" strokeWidth="3.4" strokeLinecap="round" fill="none" d="M9.5 7 7 15" />
@@ -238,9 +188,7 @@ const mondaySvg = (sz: string) => (
   </svg>
 );
 
-/* Fastmail — blue circle with a white envelope, matching the actual favicon
-   rather than the earlier blue-square "FM" monogram. Not yet confirmed
-   against a reference screenshot. */
+
 const fastmailSvg = (sz: string) => (
   <svg viewBox="0 0 24 24" className={sz} role="img" aria-label="Fastmail (approximation)">
     <circle cx="12" cy="12" r="12" fill="#0067B9" />
@@ -249,10 +197,6 @@ const fastmailSvg = (sz: string) => (
   </svg>
 );
 
-/* Kraken — confirmed against reference: a purple ghost/octopus-style
-   mascot — rounded dome head, two white oval eyes, four rounded tentacle
-   legs — with no background circle. Replaces the earlier purple-circle
-   ghost-face approximation. */
 const krakenSvg = (sz: string) => (
   <svg viewBox="0 0 24 24" className={sz} role="img" aria-label="Kraken">
     <path fill="#5741D9" d="M12 3a8 8 0 0 0-8 8v3h16v-3a8 8 0 0 0-8-8z" />
@@ -265,8 +209,7 @@ const krakenSvg = (sz: string) => (
   </svg>
 );
 
-/* Bybit — still an unverified hand-approximation. No clean unobstructed
-   reference confirmed yet; send one and this will be corrected. */
+
 const bybitSvg = (sz: string) => (
   <svg viewBox="0 0 24 24" className={sz} role="img" aria-label="Bybit (approximation)">
     <circle cx="12" cy="12" r="12" fill="#000000" />
@@ -277,9 +220,6 @@ const bybitSvg = (sz: string) => (
 );
 
 
-/* MetaMask-style wallet icon — ORIGINAL / NON-BRANDED
-   Designed as a geometric fox-inspired wallet mark without
-   reproducing the MetaMask logo. */
 const metamaskSvg = (sz: string) => (
   <svg
     viewBox="0 0 24 24"
@@ -344,13 +284,6 @@ const metamaskSvg = (sz: string) => (
 );
 
 
-
-/* Payoneer — confirmed against reference: a full rainbow ring on a plain
-   background (no white circle behind it). A true conic-gradient ring isn't
-   representable with a flat SVG <path> fill, so this uses a CSS
-   conic-gradient <div> instead of an <svg>. Note the render signature still
-   returns ReactNode, so this is a drop-in replacement for the old SVG
-   version — no changes needed elsewhere. */
 const payoneerSvg = (sz: string) => (
   <div
     className={`relative ${sz} rounded-full`}
