@@ -23,7 +23,7 @@ export function Sidebar() {
           <BrandMark className="h-8 w-8 text-primary shrink-0" />
           <div className="min-w-0">
             <h1 className="text-sm font-bold tracking-tight text-sidebar-foreground truncate">
-              Anoneurx Authenticcator
+              Anoneurx Authenticator
             </h1>
             <p className="text-[11px] text-muted-foreground truncate">Offline Authenticator</p>
           </div>

@@ -291,6 +291,7 @@ const issuerToSlug: Record<string, string> = {
   "adobe": "adobe",
   "adabie": "adobe",
   "adobi": "adobe",
+  "adobie": "adobe",
   "epic games": "epicgames",
   "epicgames": "epicgames",
   "steam": "steam",

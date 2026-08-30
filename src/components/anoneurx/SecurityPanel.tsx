@@ -23,7 +23,7 @@ export function SecurityPanel() {
           Security & Protection
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage vault locking, biometric access, and local device authentication settings.
+          Manage vault locking and local device authentication settings.
         </p>
       </div>
 
@@ -42,7 +42,7 @@ export function SecurityPanel() {
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Unlock method: Device authentication & PIN
+                Unlock method: Master Password
               </p>
             </div>
           </div>
@@ -59,31 +59,6 @@ export function SecurityPanel() {
 
         {/* Security Options */}
         <div className="space-y-4 pt-1">
-          {/* Biometric unlock toggle */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-0.5">
-              <Label
-                htmlFor="biometric-toggle"
-                className="text-sm font-medium flex items-center gap-2"
-              >
-                <Fingerprint className="h-4 w-4 text-primary" />
-                Enable Biometric Unlock
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Use fingerprint, Touch ID, or Face ID to quickly unlock your vault.
-              </p>
-            </div>
-            <Switch
-              id="biometric-toggle"
-              checked={settings.biometricUnlock}
-              onCheckedChange={(checked) => {
-                updateSettings({ biometricUnlock: checked });
-                toast.success(checked ? "Biometric unlock enabled" : "Biometric unlock disabled");
-              }}
-            />
-          </div>
-
-          <div className="border-t border-border" />
 
           {/* Require auth on launch toggle */}
           <div className="flex items-center justify-between gap-4">

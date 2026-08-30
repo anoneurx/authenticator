@@ -269,23 +269,6 @@ export function SettingsPanel() {
         </h3>
 
         <div className="space-y-4 pt-1">
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-0.5">
-              <Label className="text-sm font-medium flex items-center gap-2">
-                <Fingerprint className="h-4 w-4 text-muted-foreground" />
-                Biometric Unlock
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Unlock with WebAuthn / Touch ID / Face ID
-              </p>
-            </div>
-            <Switch
-              checked={settings.biometricUnlock}
-              onCheckedChange={(checked) => updateSettings({ biometricUnlock: checked })}
-            />
-          </div>
-
-          <div className="border-t border-border" />
 
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5">

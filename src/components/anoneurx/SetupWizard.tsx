@@ -47,7 +47,7 @@ const FEATURES = [
     icon: ShieldCheck,
     eyebrow: "Bank-grade security",
     title: "Encrypted vault",
-    body: "Secrets are sealed with AES-256-GCM and unlocked only by your face, fingerprint or password.",
+    body: "Secrets are sealed with AES-256-GCM and unlocked only by your master password.",
     tile: "border-emerald-400/25 bg-emerald-500/10 text-emerald-400",
     glow: "bg-emerald-500/25",
     chip: "border-emerald-400/20 bg-emerald-500/10 text-emerald-300",
@@ -151,7 +151,7 @@ export function SetupWizard() {
           answerHash: await hashSecret(answers[q.id] ?? "", salt),
         })),
       );
-      const enabledUnlock: UnlockMethod[] = ["face", "fingerprint"];
+      const enabledUnlock: UnlockMethod[] = ["password"];
       completeSetup({
         username: username.trim(),
         displayName: displayName.trim(),
@@ -163,15 +163,10 @@ export function SetupWizard() {
         createdAt: Date.now(),
       });
       toast.success("Vault created", {
-        description: "Use Face ID or your password to unlock.",
+        description: "Use your master password to unlock.",
       });
 
       // ── Device security prompts (same user gesture, best-effort) ──
-      // 1. Register a passkey so Face ID / fingerprint unlocks the vault.
-      if (!hasRegisteredPasskey()) {
-        await registerPasskey(username.trim(), displayName.trim());
-      }
-      // 2. Ask for notification permission (device notification center).
       await enableSystemNotifications();
     } finally {
       setBusy(false);
@@ -205,9 +200,10 @@ export function SetupWizard() {
       {/* Glassmorphism Card */}
       <div className="relative z-10 w-full max-w-[420px] rounded-[5px]  from-white/20 via-white/5 to-white/10 p-px shadow-[0_24px_80px_-12px_rgba(0,0,0,0.7)]">
         <div className="flex min-h-[620px] flex-col rounded-[5px] border border-white/10 bg-zinc-950/70 p-5 backdrop-blur-2xl sm:min-h-[640px] sm:p-7">
-          {/* Header: brand + step counter */}
+          {/* Header: brand logo + title */}
           <div className="flex items-center justify-center">
-            <div className="flex items-center gap-2 text-foreground">
+            <div className="flex flex-col items-center gap-2 text-foreground">
+              <BrandMark className="h-12 w-12 object-contain shadow-lg" />
               <span
                 className="text-sm font-bold tracking-tight"
                 style={{ fontFamily: "'Anurati', var(--font-display)" }}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import bgImage from "@/assets/background.jpg";
+import logoImg from "@/assets/logo.png";
 
 /**
  * Full-screen animated splash/logo screen shown once on app launch.
@@ -46,35 +47,15 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
           transform: phase === "in" ? "scale(0.84) translateY(18px)" : "scale(1) translateY(0)",
         }}
       >
-        {/* Shield Icon */}
+        {/* App Logo */}
         <div className="relative flex items-center justify-center">
           <div className="absolute inset-0 rounded-full bg-primary/30 blur-3xl scale-[2]" />
-          <div className="relative z-10 flex h-28 w-28 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5 shadow-2xl backdrop-blur-xl">
-            <svg
-              viewBox="0 0 48 48"
-              fill="none"
-              className="h-16 w-16 text-white drop-shadow"
-              aria-label="Anoneurx Authenticator Logo"
-            >
-              <path
-                d="M24 4L6 12V24C6 34.2 13.8 43.7 24 46C34.2 43.7 42 34.2 42 24V12L24 4Z"
-                fill="white"
-                fillOpacity="0.12"
-                stroke="white"
-                strokeOpacity="0.5"
-                strokeWidth="2"
-                strokeLinejoin="round"
-              />
-              <rect x="17" y="23" width="14" height="10" rx="2" fill="white" />
-              <path
-                d="M20 23V19C20 16.8 21.8 15 24 15C26.2 15 28 16.8 28 19V23"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                fill="none"
-              />
-              <circle cx="24" cy="27.5" r="1.5" fill="rgba(0,0,0,0.5)" />
-            </svg>
+          <div className="relative z-10 flex h-28 w-28 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5 shadow-2xl backdrop-blur-xl p-4">
+            <img
+              src={logoImg}
+              alt="Anoneurx Authenticator Logo"
+              className="h-20 w-20 object-contain drop-shadow-lg"
+            />
           </div>
         </div>
 

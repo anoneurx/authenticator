@@ -77,8 +77,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      {/* Biometric / Pattern Lock Screen Overlay */}
-      {locked && <LockScreen onRestoreBackup={() => setShowBackupImport(true)} />}
+      {/* Lock Screen Overlay */}
+      {locked && <LockScreen />}
     </div>
   );
 }

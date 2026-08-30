@@ -7,7 +7,7 @@
 
 import { getRandomBytes, bytesToHex } from "./crypto";
 
-export type UnlockMethod = "face" | "fingerprint" | "pattern";
+export type UnlockMethod = "pattern" | "password";
 
 export interface IdentityAnswer {
   id: string;

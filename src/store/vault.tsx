@@ -140,7 +140,7 @@ const DEMO_SERVICES = [
   { issuer: "OpenSea", account: "0x71C...39A", secret: "NBSWY3DPFQQHO33S" },
   { issuer: "Roblox", account: "katy_roblox", secret: "ORSW45DJN5XG433S" },
   { issuer: "PlayStation Network", account: "katy_psn", secret: "MZXW6YTBOI=======" },
-  { issuer: "Xbox / Microsoft Account", account: "katy_xbox", secret: "JBSWY3DPEHPK3PXP" },
+  { issuer: "Xbox", account: "katy_xbox@live.com", secret: "JBSWY3DPEHPK3PXP" },
   { issuer: "Nintendo Account", account: "katy_nintendo", secret: "RZXW6YTBOI======" },
   { issuer: "2FAS", account: "katy@2fas.com", secret: "JBSWY3DPEHPK3PXP" },
   { issuer: "Accenture", account: "katy.w@accenture.com", secret: "QZXXE5DFOI=======" },
