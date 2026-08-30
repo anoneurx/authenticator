@@ -26,6 +26,7 @@ import {
 } from "@/lib/vault-storage";
 import { clearPasskey } from "@/lib/webauthn";
 import { useAutoLock } from "@/hooks/use-auto-lock";
+import { notifySystem } from "@/lib/notify";
 
 export interface NewAccountInput {
   issuer: string;
@@ -206,7 +207,10 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   }, [state.settings.theme]);
 
   // Auto-lock: lock vault after inactivity period
-  const lockFn = useCallback(() => setLocked(true), []);
+  const lockFn = useCallback(() => {
+    setLocked(true);
+    notifySystem("Vault locked", "Your ANONEURX vault was locked for security.");
+  }, []);
   useAutoLock(state.settings.autoLock, locked, lockFn);
 
   const addAccount = useCallback((input: NewAccountInput) => {

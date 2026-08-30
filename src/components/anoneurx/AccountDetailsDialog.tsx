@@ -26,7 +26,7 @@ import { ServiceIcon } from "./ServiceIcon";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useTick } from "./useTick";
 import { useTotpCode } from "./useTotpCode";
-import { toast } from "@/lib/notify";
+import { toast, notifySystem } from "@/lib/notify";
 import { authenticateDeviceLock } from "@/lib/device-lock";
 
 export function AccountDetailsDialog({
@@ -94,6 +94,7 @@ export function AccountDetailsDialog({
       await navigator.clipboard.writeText(code);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
+      notifySystem("Code Copied", `${account.issuer} code (${formattedCode}) copied to clipboard.`);
       toast.success("Verification Code Copied", {
         description: `${account.issuer} code (${formattedCode}) copied to clipboard. Refreshes in ${remaining}s.`,
       });

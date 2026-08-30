@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { useVault } from "@/store/vault";
 import { BrandMark } from "./BrandMark";
 import { RestoreWizard } from "./RestoreWizard";
-import { toast } from "@/lib/notify";
+import { toast, notifySystem } from "@/lib/notify";
 import { verifySecret } from "@/lib/identity";
 import bgImage from "@/assets/background.jpg";
 
@@ -40,6 +40,7 @@ export function LockScreen({ onRestoreBackup }: { onRestoreBackup?: () => void }
     setPasswordBusy(false);
     if (ok) {
       unlock();
+      notifySystem("Vault unlocked", "Your ANONEURX vault was unlocked.");
       toast.success("Vault unlocked", { description: "Password accepted." });
     } else {
       setPasswordError("Incorrect password. Try again.");

@@ -1,9 +1,11 @@
 /**
  * Anoneurx Notification Bridge.
  *
- * Routes app events to the device notification center via Capacitor
- * Local Notifications (Android/iOS) when the user has opted in. Falls back to
- * Web Notifications API and then classic in-app sonner toast otherwise.
+ * Two distinct channels:
+ *  - `toast`      : in-app sonner toasts only (never reach the device notification center).
+ *  - `notifySystem`: pushes a real device notification via Capacitor Local Notifications
+ *                    (Android/iOS) or the Web Notifications API, when the user has opted in.
+ *                    Used only for lock / unlock / TOTP-copy events.
  */
 import { Capacitor } from "@capacitor/core";
 import { toast as sonner } from "sonner";
@@ -38,7 +40,6 @@ export function systemNotificationsActive(): boolean {
 export async function enableSystemNotifications(): Promise<boolean> {
   if (!systemNotificationsSupported()) return false;
 
-  // Native: request via Capacitor Local Notifications
   if (Capacitor.isNativePlatform()) {
     try {
       const { LocalNotifications } = await import("@capacitor/local-notifications");
@@ -51,7 +52,6 @@ export async function enableSystemNotifications(): Promise<boolean> {
     }
   }
 
-  // Web fallback
   let permission = Notification.permission;
   if (permission === "default") {
     try {
@@ -77,11 +77,7 @@ export function disableSystemNotifications(): void {
   }
 }
 
-async function showNativeNotification(
-  title: string,
-  description?: string,
-  kind = "default",
-): Promise<boolean> {
+async function showNativeNotification(title: string, description?: string, kind = "default"): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return false;
   try {
     const { LocalNotifications } = await import("@capacitor/local-notifications");
@@ -102,25 +98,13 @@ async function showNativeNotification(
   }
 }
 
-async function showSystemNotification(
-  title: string,
-  description?: string,
-  kind = "default",
-): Promise<boolean> {
-  if (!systemNotificationsActive()) return false;
-
-  // Try native first
-  if (Capacitor.isNativePlatform()) {
-    return showNativeNotification(title, description, kind);
-  }
-
-  // Web Notification API
+async function showWebNotification(title: string, description?: string, kind = "default"): Promise<boolean> {
+  if (Capacitor.isNativePlatform()) return false;
   const options: NotificationOptions = {
     ...(description !== undefined ? { body: description } : {}),
     icon: "/favicon.ico",
     tag: `anoneurx-${kind}`,
   };
-
   try {
     if ("serviceWorker" in navigator) {
       const registration = await navigator.serviceWorker.getRegistration();
@@ -140,23 +124,25 @@ async function showSystemNotification(
   }
 }
 
-function route(
-  kind: "success" | "error" | "info" | "warning",
-  title: string,
-  data?: ToastData,
-): void {
-  void showSystemNotification(title, data?.description, kind).then((shown) => {
-    if (!shown) {
-      sonner[kind](title, data);
-    }
-  });
+/**
+ * Send a real device notification (lock / unlock / TOTP copy only).
+ * Silently no-ops if system notifications are not active.
+ */
+export function notifySystem(title: string, description?: string, kind = "default"): void {
+  if (!systemNotificationsActive()) return;
+  if (Capacitor.isNativePlatform()) {
+    void showNativeNotification(title, description, kind);
+  } else {
+    void showWebNotification(title, description, kind);
+  }
 }
 
+/** In-app sonner toast — never triggers a device notification. */
 export const toast = {
-  success: (title: string, data?: ToastData) => route("success", title, data),
-  error: (title: string, data?: ToastData) => route("error", title, data),
-  info: (title: string, data?: ToastData) => route("info", title, data),
-  warning: (title: string, data?: ToastData) => route("warning", title, data),
+  success: (title: string, data?: ToastData) => void sonner.success(title, data),
+  error: (title: string, data?: ToastData) => void sonner.error(title, data),
+  info: (title: string, data?: ToastData) => void sonner.info(title, data),
+  warning: (title: string, data?: ToastData) => void sonner.warning(title, data),
   message: sonner.message.bind(sonner),
   loading: sonner.loading.bind(sonner),
   promise: sonner.promise.bind(sonner),
