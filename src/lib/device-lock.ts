@@ -35,7 +35,7 @@ export async function authenticateDeviceLock(actionName = "delete this account")
       const credential = await navigator.credentials.create({
         publicKey: {
           challenge,
-          rp: { name: "Anoneurx Authenticator" },
+          rp: { name: "Authenticator" },
           user: {
             id: userId,
             name: "vault-user",

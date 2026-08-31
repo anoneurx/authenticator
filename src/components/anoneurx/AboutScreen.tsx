@@ -53,11 +53,11 @@ export function AboutScreen({ onClose }: AboutScreenProps) {
           {/* Description */}
           <section className="p-5 space-y-3">
             <h3 className="text-sm font-semibold text-foreground">
-              About Anoneurx Authenticator
+              About Authenticator
             </h3>
 
             <p className="text-sm leading-6 text-muted-foreground">
-              Anoneurx Authenticator is a privacy-first, offline two-factor
+              Authenticator is a privacy-first, offline two-factor
               authentication app designed to generate TOTP security codes
               directly on your device.
             </p>

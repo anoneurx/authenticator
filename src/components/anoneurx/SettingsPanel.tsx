@@ -62,6 +62,58 @@ export function SettingsPanel() {
   >(null);
   const [showAbout, setShowAbout] = useState(false);
 
+  // ── Direct Export Vault modal state ────────────────────────────────────
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportPassword, setExportPassword] = useState("");
+  const [exportConfirm, setExportConfirm] = useState("");
+  const [showExportPass, setShowExportPass] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
+
+  async function handleDirectExport() {
+    if (!exportPassword) {
+      setExportError("Choose a password to encrypt your backup file.");
+      return;
+    }
+    if (exportPassword.length < 4) {
+      setExportError("Backup password must be at least 4 characters.");
+      return;
+    }
+    if (exportPassword !== exportConfirm) {
+      setExportError("Backup passwords do not match.");
+      return;
+    }
+    setExportBusy(true);
+    try {
+      const payload = await createBackupPayloadAsync(
+        { accounts, settings, backup, profile: null },
+        exportPassword,
+      );
+      const blob = new Blob([payload], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = BACKUP_FILENAME;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      recordBackup(BACKUP_FILENAME);
+      setExportError("");
+      setExportOpen(false);
+      setExportPassword("");
+      setExportConfirm("");
+      toast.success("Encrypted backup downloaded", {
+        description: `Saved as ${BACKUP_FILENAME}. Keep it somewhere safe.`,
+      });
+    } catch {
+      setExportError("Could not create the backup file. Please try again.");
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   // ── Change master password ─────────────────────────────────────────────
   const [changePassOpen, setChangePassOpen] = useState(false);
   const [currentPass, setCurrentPass] = useState("");
@@ -270,6 +322,32 @@ export function SettingsPanel() {
 
         <div className="space-y-4 pt-1">
 
+          {/* Require Authentication on Launch */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5 min-w-0">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <Lock className="h-4 w-4 text-muted-foreground" />
+                Require Authentication on Launch
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Prompt for master password verification whenever app opens
+              </p>
+            </div>
+            <Switch
+              checked={settings.requireAuthOnLaunch}
+              onCheckedChange={(checked) => {
+                updateSettings({ requireAuthOnLaunch: checked });
+                toast.success(
+                  checked
+                    ? "Authentication required on app launch"
+                    : "Launch authentication disabled",
+                );
+              }}
+            />
+          </div>
+
+          <div className="border-t border-border" />
+
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5">
               <Label className="text-sm font-medium flex items-center gap-2">
@@ -346,22 +424,22 @@ export function SettingsPanel() {
           Vault Data Management
         </h3>
         <p className="text-xs text-muted-foreground">
-          Export or restore your encrypted authenticator vault file.
+          Directly export an encrypted backup of your authenticator vault file.
         </p>
 
-        <div className="flex flex-wrap gap-3 pt-1">
-          <Link to="/backup">
-            <Button variant="outline" size="sm" className="h-9 gap-2 text-xs">
-              <HardDriveDownload className="h-3.5 w-3.5" />
-              Export Encrypted Backup
-            </Button>
-          </Link>
-          <Link to="/backup">
-            <Button variant="secondary" size="sm" className="h-9 gap-2 text-xs">
-              <HardDriveUpload className="h-3.5 w-3.5" />
-              Import Backup (.aax)
-            </Button>
-          </Link>
+        <div className="pt-1">
+          <Button
+            onClick={() => {
+              setExportError("");
+              setExportPassword("");
+              setExportConfirm("");
+              setExportOpen(true);
+            }}
+            className="h-9 gap-2 text-xs font-semibold"
+          >
+            <HardDriveDownload className="h-3.5 w-3.5" />
+            Export Encrypted Backup (.aax)
+          </Button>
         </div>
       </div>
 
@@ -405,7 +483,7 @@ export function SettingsPanel() {
             {activeInfoModal === "privacy" && (
               <>
                 <p>
-                  Anoneurx Authenticator operates entirely on your device. No analytics, tracking
+                  Authenticator operates entirely on your device. No analytics, tracking
                   pixels, or third-party telemetries exist in this application.
                 </p>
                 <p>
@@ -431,7 +509,7 @@ export function SettingsPanel() {
             {activeInfoModal === "opensource" && (
               <>
                 <p>
-                  Anoneurx Authenticator frontend is built with open, inspectable web components
+                  Authenticator frontend is built with open, inspectable web components
                   (React, Vite, TypeScript, Tailwind CSS).
                 </p>
                 <p>
@@ -657,6 +735,98 @@ export function SettingsPanel() {
               )}
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Backup Modal */}
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HardDriveDownload className="h-5 w-5 text-primary" />
+              Export Encrypted Backup
+            </DialogTitle>
+            <DialogDescription>
+              Set a password to encrypt your <span className="font-mono">.aax</span> backup file.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1">
+            <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3.5">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Backup password</Label>
+                <div className="relative">
+                  <Input
+                    type={showExportPass ? "text" : "password"}
+                    value={exportPassword}
+                    onChange={(e) => {
+                      setExportPassword(e.target.value);
+                      if (exportError) setExportError("");
+                    }}
+                    placeholder="Encrypts the backup file"
+                    className="h-10 pr-10 text-sm"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowExportPass(!showExportPass)}
+                    aria-label={showExportPass ? "Hide password" : "Show password"}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {showExportPass ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Confirm backup password</Label>
+                <Input
+                  type={showExportPass ? "text" : "password"}
+                  value={exportConfirm}
+                  onChange={(e) => {
+                    setExportConfirm(e.target.value);
+                    if (exportError) setExportError("");
+                  }}
+                  placeholder="Repeat backup password"
+                  className="h-10 text-sm"
+                />
+              </div>
+            </div>
+
+            {exportError && (
+              <p className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                {exportError}
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setExportOpen(false)}
+                className="h-9 px-4 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => void handleDirectExport()}
+                disabled={exportBusy}
+                className="h-9 gap-2 px-4 text-xs font-semibold"
+              >
+                {exportBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <HardDriveDownload className="h-3.5 w-3.5" />
+                )}
+                Download Backup (.aax)
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

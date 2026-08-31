@@ -53,7 +53,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
           <div className="relative z-10 flex h-28 w-28 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5 shadow-2xl backdrop-blur-xl p-4">
             <img
               src={logoImg}
-              alt="Anoneurx Authenticator Logo"
+              alt="Authenticator Logo"
               className="h-20 w-20 object-contain drop-shadow-lg"
             />
           </div>
@@ -65,7 +65,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
             className="text-sm font-bold tracking-tight"
             style={{ fontFamily: "'Anurati', var(--font-display)" }}
           >
-            ANONEURX AUTHENTICATOR
+            AUTHENTICATOR
           </span>
 
         </div>

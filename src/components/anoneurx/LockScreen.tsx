@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
-  KeyRound,
   Shield,
   Eye,
   EyeOff,
   Lock,
+  Fingerprint,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,15 +14,89 @@ import { RestoreWizard } from "./RestoreWizard";
 import { toast, notifySystem } from "@/lib/notify";
 import { verifySecret } from "@/lib/identity";
 import bgImage from "@/assets/background.jpg";
+import { Capacitor } from "@capacitor/core";
+
+/**
+ * Attempt native biometric auth (fingerprint / face).
+ * Returns true if the user authenticated successfully.
+ */
+async function promptBiometric(reason: string): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return false;
+  try {
+    const { BiometricAuth, BiometryType } = await import("@aparajita/capacitor-biometric-auth");
+
+    const check = await BiometricAuth.checkBiometry();
+    if (!check.isAvailable || check.biometryType === BiometryType.none) return false;
+
+    await BiometricAuth.authenticate({
+      reason,
+      cancelTitle: "Use Password",
+      allowDeviceCredential: true,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function LockScreen({ onRestoreBackup }: { onRestoreBackup?: () => void }) {
-  const { unlock, profile } = useVault();
+  const { unlock, profile, settings } = useVault();
 
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [biometricReady, setBiometricReady] = useState(false);
+  const [biometricBusy, setBiometricBusy] = useState(false);
+
+  // ── Check biometric availability and auto-prompt ──
+  useEffect(() => {
+    let cancelled = false;
+
+    async function init() {
+      if (!Capacitor.isNativePlatform()) return;
+      if (!settings.biometricUnlock) return;
+
+      try {
+        const { BiometricAuth, BiometryType } = await import("@aparajita/capacitor-biometric-auth");
+
+        const check = await BiometricAuth.checkBiometry();
+        if (cancelled) return;
+        if (!check.isAvailable || check.biometryType === BiometryType.none) return;
+
+        setBiometricReady(true);
+
+        // Auto-prompt biometric immediately
+        await BiometricAuth.authenticate({
+          reason: "Unlock your vault",
+          cancelTitle: "Use Password",
+          allowDeviceCredential: true,
+        });
+        if (cancelled) return;
+
+        unlock();
+        notifySystem("Vault unlocked", "Vault was unlocked via biometric.");
+        toast.success("Vault unlocked", { description: "Biometric authentication accepted." });
+      } catch {
+        // Biometric not available — show password form
+      }
+    }
+
+    init();
+    return () => { cancelled = true; };
+  }, [unlock, settings.biometricUnlock]);
+
+  const handleBiometricUnlock = useCallback(async () => {
+    setBiometricBusy(true);
+    const ok = await promptBiometric("Unlock your vault");
+    setBiometricBusy(false);
+    if (ok) {
+      unlock();
+      notifySystem("Vault unlocked", "Vault was unlocked via biometric.");
+      toast.success("Vault unlocked", { description: "Biometric authentication accepted." });
+    }
+  }, [unlock]);
 
   async function handlePasswordSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,7 +114,7 @@ export function LockScreen({ onRestoreBackup }: { onRestoreBackup?: () => void }
     setPasswordBusy(false);
     if (ok) {
       unlock();
-      notifySystem("Vault unlocked", "Your ANONEURX vault was unlocked.");
+      notifySystem("Vault unlocked", "Vault was unlocked.");
       toast.success("Vault unlocked", { description: "Password accepted." });
     } else {
       setPasswordError("Incorrect password. Try again.");
@@ -68,7 +142,7 @@ export function LockScreen({ onRestoreBackup }: { onRestoreBackup?: () => void }
       {/* Dark overlay */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
-      {/* Glassmorphism Card matching SetupWizard */}
+      {/* Glassmorphism Card */}
       <div className="relative z-10 w-full max-w-[420px] rounded-[5px] from-white/20 via-white/5 to-white/10 p-px shadow-[0_24px_80px_-12px_rgba(0,0,0,0.7)]">
         <div className="flex min-h-[580px] flex-col justify-between rounded-[5px] border border-white/10 bg-zinc-950/70 p-6 backdrop-blur-2xl sm:p-7">
           {/* Header */}
@@ -79,13 +153,13 @@ export function LockScreen({ onRestoreBackup }: { onRestoreBackup?: () => void }
                 className="text-sm font-bold tracking-tight text-foreground"
                 style={{ fontFamily: "'Anurati', var(--font-display)" }}
               >
-                ANONEURX AUTHENTICATOR
+                AUTHENTICATOR
               </span>
             </div>
             <div className="space-y-1 pt-1 border-t border-white/10">
               <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
                 <Lock className="h-4 w-4 text-primary" />
-                Master Password
+                {biometricReady ? "Unlock Vault" : "Master Password"}
               </h2>
               {profile?.displayName ? (
                 <p className="text-xs text-muted-foreground">
@@ -98,8 +172,40 @@ export function LockScreen({ onRestoreBackup }: { onRestoreBackup?: () => void }
             </div>
           </div>
 
-          {/* PASSWORD FORM */}
+          {/* UNLOCK OPTIONS */}
           <div className="my-auto w-full space-y-5 px-1 pt-2">
+            {/* Biometric unlock button */}
+            {biometricReady && (
+              <div className="flex flex-col items-center gap-4">
+                <button
+                  type="button"
+                  onClick={handleBiometricUnlock}
+                  disabled={biometricBusy}
+                  className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-primary/30 bg-primary/10 backdrop-blur-sm transition-all hover:bg-primary/20 hover:border-primary/50 hover:scale-105 active:scale-95 disabled:opacity-50"
+                  title="Unlock with biometric"
+                  aria-label="Unlock with fingerprint or face"
+                >
+                  {biometricBusy ? (
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  ) : (
+                    <Fingerprint className="h-10 w-10 text-primary" />
+                  )}
+                </button>
+                <p className="text-xs text-muted-foreground">
+                  Tap to unlock with fingerprint or face
+                </p>
+
+                <div className="relative w-full">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-white/10" />
+                  </div>
+                  <div className="relative flex justify-center text-[11px]">
+                    <span className="bg-zinc-950/70 px-3 text-muted-foreground">or use password</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handlePasswordSubmit} className="space-y-4">
               <div className="space-y-1.5 text-left">
                 <div className="relative">
@@ -112,7 +218,7 @@ export function LockScreen({ onRestoreBackup }: { onRestoreBackup?: () => void }
                     }}
                     placeholder="Enter master password"
                     className="h-11 text-sm bg-white/5 border-white/10 text-foreground placeholder:text-muted-foreground/60 pr-10 focus-visible:ring-primary"
-                    autoFocus
+                    autoFocus={!biometricReady}
                   />
                   <button
                     type="button"
@@ -164,7 +270,7 @@ export function LockScreen({ onRestoreBackup }: { onRestoreBackup?: () => void }
 
             <div className="flex items-center justify-center gap-1.5 text-[11px] font-semibold text-emerald-400">
               <Shield className="h-3.5 w-3.5" />
-              <span>Protected by Anoneurx Identity</span>
+              <span>Protected by Authenticator Identity</span>
             </div>
           </div>
         </div>

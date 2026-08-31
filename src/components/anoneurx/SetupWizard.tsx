@@ -4,7 +4,6 @@ import {
   WifiOff,
   KeyRound,
   ArrowRight,
-  ArrowLeft,
   Eye,
   EyeOff,
   UserRound,
@@ -14,6 +13,8 @@ import {
   Loader2,
   Sparkles,
   Fingerprint,
+  Plus,
+  HardDriveUpload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ import { toast, enableSystemNotifications } from "@/lib/notify";
 import { hasRegisteredPasskey, registerPasskey } from "@/lib/webauthn";
 import bgImage from "@/assets/background.jpg";
 import { BrandMark } from "./BrandMark";
+import { RestoreWizard } from "./RestoreWizard";
 
 const FEATURES = [
   {
@@ -63,10 +65,8 @@ const FEATURES = [
   },
 ];
 
-const TOTAL_STEPS = 5;
-
-// 5 steps total: 0-2 feature slides, 3 identity questions, 4 credentials
-type Step = 0 | 1 | 2 | 3 | 4;
+// Steps: 0-2 features, 3 account choice, 4 identity questions, 5 credentials
+type Step = 0 | 1 | 2 | 3 | 4 | 5;
 
 const STRENGTH_BARS = [
   "bg-red-500",
@@ -81,6 +81,7 @@ export function SetupWizard() {
   const { completeSetup } = useVault();
   const [step, setStep] = useState<Step>(0);
   const [direction, setDirection] = useState<"forward" | "back">("forward");
+  const [showRestore, setShowRestore] = useState(false);
 
   // identity answers
   const picked = IDENTITY_QUESTIONS.slice(0, 3);
@@ -100,6 +101,7 @@ export function SetupWizard() {
   const strength = passwordStrength(password);
   const passwordsMatch = confirm.length > 0 && password === confirm;
   const isIntro = step <= 2;
+  const isAccountChoice = step === 3;
   const featureIdx = Math.min(step, 2);
   const feature = FEATURES[featureIdx]!;
   const FeatureIcon = feature.icon;
@@ -120,7 +122,7 @@ export function SetupWizard() {
       setError("Please answer all three identity questions.");
       return;
     }
-    goTo(4);
+    goTo(5);
   }
 
   async function finish() {
@@ -152,7 +154,7 @@ export function SetupWizard() {
         })),
       );
       const enabledUnlock: UnlockMethod[] = ["password"];
-      completeSetup({
+      const profile = {
         username: username.trim(),
         displayName: displayName.trim(),
         passwordHash: await hashSecret(password, salt),
@@ -161,13 +163,16 @@ export function SetupWizard() {
         identity,
         enabledUnlock,
         createdAt: Date.now(),
-      });
+      };
+      completeSetup(profile);
       toast.success("Vault created", {
         description: "Use your master password to unlock.",
       });
 
-      // ── Device security prompts (same user gesture, best-effort) ──
       await enableSystemNotifications();
+    } catch (err) {
+      console.error("Vault creation failed:", err);
+      setError("Failed to create vault. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -177,6 +182,15 @@ export function SetupWizard() {
     direction === "forward"
       ? "animate-in fade-in slide-in-from-right-6 duration-300"
       : "animate-in fade-in slide-in-from-left-6 duration-300";
+
+  if (showRestore) {
+    return (
+      <RestoreWizard
+        onCancel={() => setShowRestore(false)}
+        onSuccess={() => setShowRestore(false)}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-auto p-4 sm:p-6">
@@ -208,7 +222,7 @@ export function SetupWizard() {
                 className="text-sm font-bold tracking-tight"
                 style={{ fontFamily: "'Anurati', var(--font-display)" }}
               >
-                ANONEURX AUTHENTICATOR
+                AUTHENTICATOR
               </span>
             </div>
           </div>
@@ -254,19 +268,65 @@ export function SetupWizard() {
             </div>
           )}
 
-          {/* ── Identity questions (step 3) ── */}
-          {step === 3 && (
+          {/* ── Account choice (step 3) ── */}
+          {isAccountChoice && (
+            <div key="account-choice" className={cn("my-auto w-full space-y-5 py-2", slideAnim)}>
+              <div className="space-y-1.5 text-center">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
+                  <Sparkles className="h-3 w-3" />
+                  Get started
+                </span>
+                <h2 className="pt-1 text-xl font-bold tracking-tight">Welcome to Authenticator</h2>
+                <p className="mx-auto max-w-[300px] text-xs leading-relaxed text-muted-foreground">
+                  Create a brand new vault on this device, or restore a previous vault from a backup file.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-2">
+                {/* Create new account */}
+                <button
+                  type="button"
+                  onClick={() => goTo(4)}
+                  className="group flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition-all hover:bg-white/10 hover:border-primary/30 hover:scale-[1.01] active:scale-[0.99]"
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary transition-colors group-hover:bg-primary/25">
+                    <Plus className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-bold text-foreground">Create a New Account</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Set up a fresh vault with a new master password and recovery questions.
+                    </p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-colors" />
+                </button>
+
+                {/* Recover previous account */}
+                <button
+                  type="button"
+                  onClick={() => setShowRestore(true)}
+                  className="group flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-4 text-left transition-all hover:bg-white/10 hover:border-emerald-500/30 hover:scale-[1.01] active:scale-[0.99]"
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400 transition-colors group-hover:bg-emerald-500/25">
+                    <HardDriveUpload className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-bold text-foreground">Recover Previous Account</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Restore your codes from an encrypted .aax backup file.
+                    </p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-colors" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Identity questions (step 4) ── */}
+          {step === 4 && (
             <div key="identity" className={cn("my-auto w-full space-y-4 py-2", slideAnim)}>
               <div className="space-y-1.5 text-center">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Fingerprint className="h-3 w-3" />
-                  Recovery setup
-                </span>
                 <h2 className="pt-1 text-xl font-bold tracking-tight">Identity questions</h2>
-                <p className="mx-auto max-w-[300px] text-xs leading-relaxed text-muted-foreground">
-                  Used only on this device to recover access. Answers are hashed, never stored as
-                  text.
-                </p>
               </div>
 
               {picked.map((q, qi) => (
@@ -290,8 +350,8 @@ export function SetupWizard() {
             </div>
           )}
 
-          {/* ── Credentials (step 4 — final) ── */}
-          {step === 4 && (
+          {/* ── Credentials (step 5 — final) ── */}
+          {step === 5 && (
             <div key="credentials" className={cn("my-auto w-full space-y-4 py-2", slideAnim)}>
               <div className="space-y-1.5 text-center">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
@@ -425,37 +485,40 @@ export function SetupWizard() {
           {/* Navigation */}
           <div className="mt-auto pt-6">
             <div className="flex items-center gap-2.5">
-              <Button
-                className="h-11 flex-1 gap-2 bg-gradient-to-r from-primary to-sky-500 font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:shadow-primary/40 hover:brightness-110 active:scale-[0.99]"
-                disabled={busy}
-                onClick={() => {
-                  if (step <= 2) goTo((step + 1) as Step);
-                  else if (step === 3) validateIdentity();
-                  else void finish();
-                }}
-              >
-                {busy ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Securing your vault…
-                  </>
-                ) : isIntro ? (
-                  <>
-                    Next
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                ) : step === 3 ? (
-                  <>
-                    Continue
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                ) : (
-                  <>
-                    Create my vault
-                    <ShieldCheck className="h-4 w-4" />
-                  </>
-                )}
-              </Button>
+              {/* Main action button — hidden on account choice step (buttons are in the cards) */}
+              {!isAccountChoice && (
+                <Button
+                  className="h-11 flex-1 gap-2 bg-gradient-to-r from-primary to-sky-500 font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:shadow-primary/40 hover:brightness-110 active:scale-[0.99]"
+                  disabled={busy}
+                  onClick={() => {
+                    if (step <= 2) goTo((step + 1) as Step);
+                    else if (step === 4) validateIdentity();
+                    else void finish();
+                  }}
+                >
+                  {busy ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Securing your vault…
+                    </>
+                  ) : isIntro ? (
+                    <>
+                      Next
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  ) : step === 4 ? (
+                    <>
+                      Continue
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  ) : (
+                    <>
+                      Create my vault
+                      <ShieldCheck className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
             <p className="mt-3.5 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground/80">
               <LockKeyhole className="h-3 w-3" />

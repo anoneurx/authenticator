@@ -94,7 +94,7 @@ export function AccountDetailsDialog({
       await navigator.clipboard.writeText(code);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
-      notifySystem("Code Copied", `${account.issuer} code (${formattedCode}) copied to clipboard.`);
+      notifySystem("Code Copied", `${account.issuer} code copied to clipboard.`);
       toast.success("Verification Code Copied", {
         description: `${account.issuer} code (${formattedCode}) copied to clipboard. Refreshes in ${remaining}s.`,
       });

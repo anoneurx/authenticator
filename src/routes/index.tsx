@@ -74,12 +74,7 @@ function AuthenticatorScreen() {
         {/* Accounts List View */}
         <div className="space-y-2.5">
           {accounts.length === 0 ? (
-            <EmptyState
-              onAdd={() => setAddModalOpen(true)}
-              onImport={() => {
-                window.location.href = "/backup";
-              }}
-            />
+            <EmptyState onAdd={() => setAddModalOpen(true)} />
           ) : filteredAccounts.length === 0 ? (
             <div className="rounded-2xl border border-border bg-card p-12 text-center space-y-3 shadow-xs">
               <Search className="mx-auto h-8 w-8 text-muted-foreground" />

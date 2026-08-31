@@ -12,9 +12,67 @@ import { App } from "@capacitor/app";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { VaultProvider } from "@/store/vault";
+import { VaultProvider, useVault } from "@/store/vault";
 import { Toaster } from "@/components/ui/sonner";
 import { SplashScreen } from "@/components/anoneurx/SplashScreen";
+
+function BackButtonHandler() {
+  const router = useRouter();
+  const { locked } = useVault();
+
+  useEffect(() => {
+    const listener = App.addListener("backButton", ({ canGoBack }) => {
+      // Close any open dialogs/overlays first
+      const overlay = document.querySelector(
+        '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-custom-overlay="open"]'
+      );
+      if (overlay) {
+        document.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "Escape",
+            code: "Escape",
+            keyCode: 27,
+            which: 27,
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+        return;
+      }
+
+      // If vault is locked, don't navigate - just stay on lock screen
+      if (locked) {
+        return;
+      }
+
+      // Use router history to navigate to previous screen
+      try {
+        const history = router.history;
+        const current = history.location;
+        // Check if we're at the root route
+        if (current.pathname === "/") {
+          App.exitApp();
+          return;
+        }
+        // Navigate back using router
+        history.back();
+      } catch {
+        // Fallback to window history
+        if (window.history.length > 1) {
+          window.history.back();
+        } else {
+          App.exitApp();
+        }
+      }
+    });
+
+    return () => {
+      listener.then((handle) => handle.remove()).catch(() => {});
+    };
+  }, [router, locked]);
+
+  return null;
+}
 
 function NotFoundComponent() {
   return (
@@ -81,7 +139,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1" },
-      { title: "Anoneurx Authenticator — Offline TOTP & Security Vault" },
+      { title: "Authenticator — Offline TOTP & Security Vault" },
       {
         name: "description",
         content:
@@ -90,7 +148,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "theme-color", content: "#18181b" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
-      { property: "og:title", content: "Anoneurx Authenticator" },
+      { property: "og:title", content: "Authenticator" },
       {
         property: "og:description",
         content: "Your codes. Your device. Your privacy. Completely offline authenticator.",
@@ -137,47 +195,14 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const [splashDone, setSplashDone] = useState(false);
-  const router = useRouter();
-
-  // ── Android hardware back button ───────────────────────────────────────────
-  // By default Capacitor finishes the activity (closes the app) when there is no
-  // webview history. Intercept it so sub-screens / dialogs close first, then fall
-  // back to in-app router history, and only exit at the root screen.
-  useEffect(() => {
-    const listener = App.addListener("backButton", () => {
-      const overlay = document.querySelector(
-        '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [data-custom-overlay="open"]'
-      );
-      if (overlay) {
-        document.dispatchEvent(
-          new KeyboardEvent("keydown", {
-            key: "Escape",
-            code: "Escape",
-            keyCode: 27,
-            which: 27,
-            bubbles: true,
-            cancelable: true,
-          })
-        );
-        return;
-      }
-      if (window.history.length > 1) {
-        window.history.back();
-      } else {
-        App.exitApp();
-      }
-    });
-
-    return () => {
-      listener.then((handle) => handle.remove()).catch(() => {});
-    };
-  }, [router]);
 
   return (
     <QueryClientProvider client={queryClient}>
       <VaultProvider>
         {/* Splash screen shown once on launch */}
         {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
+        {/* Android hardware back button handler */}
+        <BackButtonHandler />
         {/* Required: nested routes render here */}
         <Outlet />
         <Toaster />

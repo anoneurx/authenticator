@@ -29,7 +29,13 @@ export function useAutoLock(autoLock: AutoLockDelay, locked: boolean, lock: () =
   const startTimer = useCallback(() => {
     clearTimer();
     const ms = DELAY_MS[autoLock];
-    if (ms <= 0) return;
+    if (ms <= 0) {
+      // "immediate" mode: lock right away
+      if (autoLock === "immediate") {
+        lock();
+      }
+      return;
+    }
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       lock();
@@ -58,15 +64,27 @@ export function useAutoLock(autoLock: AutoLockDelay, locked: boolean, lock: () =
     return clearTimer;
   }, [autoLock, locked, startTimer, clearTimer]);
 
-  // Lock on visibility change (tab hidden)
+  // Lock on visibility change (tab hidden / app backgrounded)
   useEffect(() => {
     if (locked || autoLock === "never") return;
 
     const onVisibility = () => {
       if (document.hidden) {
-        clearTimer();
-        lock();
+        const ms = DELAY_MS[autoLock];
+        if (ms <= 0) {
+          // Immediate or immediate mode
+          clearTimer();
+          lock();
+        } else {
+          // Timer-based: start a short timer (min of configured delay, 10s cap for background)
+          clearTimer();
+          timerRef.current = setTimeout(() => {
+            timerRef.current = null;
+            lock();
+          }, Math.min(ms, 10_000));
+        }
       } else if (autoLock !== "immediate") {
+        // App foreground again — restart the normal idle timer
         startTimer();
       }
     };

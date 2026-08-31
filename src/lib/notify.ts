@@ -87,8 +87,8 @@ async function showNativeNotification(title: string, description?: string, kind 
           title,
           body: description ?? "",
           id: Math.floor(Date.now() / 1000) % 2147483647,
-          smallIcon: "ic_stat_icon_config_sample",
-          largeIcon: "ic_launcher",
+          smallIcon: "ic_stat_notification",
+          largeIcon: "ic_notification_large",
         },
       ],
     });

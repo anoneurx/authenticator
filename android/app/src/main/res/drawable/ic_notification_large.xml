@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- White Background Tile -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 0,0 h 108 v 108 h -108 Z" />
+
+    <!-- Hexagon Emblem (Dark Slate / Black) with Generous Padding -->
+    <path
+        android:fillColor="#18181b"
+        android:pathData="M 54,32 C 54.9,32 55.7,32.4 56.2,33.3 L 72.8,42.5 C 73.3,42.8 73.6,43.4 73.6,44 L 73.6,64 C 73.6,64.6 73.3,65.2 72.8,65.5 L 56.2,74.7 C 55.7,75.6 54.9,76 54,76 C 53.1,76 52.3,75.6 51.8,74.7 L 35.2,65.5 C 34.7,65.2 34.4,64.6 34.4,64 L 34.4,44 C 34.4,43.4 34.7,42.8 35.2,42.5 L 51.8,33.3 C 52.3,32.4 53.1,32 54,32 Z" />
+
+    <!-- Inner Ring (White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 54,41 C 61.18,41 67,46.82 67,54 C 67,61.18 61.18,67 54,67 C 46.82,67 41,61.18 41,54 C 41,46.82 46.82,41 54,41 Z M 54,45.5 C 49.31,45.5 45.5,49.31 45.5,54 C 45.5,58.69 49.31,62.5 54,62.5 C 58.69,62.5 62.5,58.69 62.5,54 C 62.5,48.69 58.69,45.5 54,45.5 Z" />
+
+    <!-- Keyhole Emblem (White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 54,48.3 C 51.95,48.3 50.3,49.95 50.3,52 C 50.3,53.28 50.95,54.4 51.9,55.1 L 52.7,62.5 L 55.3,62.5 L 56.1,55.1 C 57.05,54.4 57.7,53.28 57.7,52 C 57.7,49.95 56.05,48.3 54,48.3 Z" />
+</vector>

@@ -10,8 +10,8 @@ export function MobileBottomNav({
   const currentPath = routerState.location.pathname;
 
   return (
-    /* Mobile Bottom Navigation Bar */
-    <div className="fixed bottom-0 left-0 right-0 z-30 flex h-16 items-center border-t border-border bg-card/95 backdrop-blur-md md:hidden select-none">
+    /* Universal Bottom Navigation Bar */
+    <div className="fixed bottom-0 left-0 right-0 z-30 flex h-16 items-center border-t border-border bg-card/95 backdrop-blur-md select-none">
       {/* Left tab — Authenticator */}
       <Link
         to="/"

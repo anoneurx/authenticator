@@ -6,7 +6,7 @@ export function BrandMark({ className, size = 28 }: { className?: string; size?:
   return (
     <img
       src={logoImg}
-      alt="Anoneurx Authenticator"
+      alt="Authenticator"
       className={cn("shrink-0 object-contain", className)}
       style={{ width: size, height: size }}
     />

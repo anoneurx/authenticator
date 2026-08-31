@@ -162,7 +162,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [storageAvailable, setStorageAvailable] = useState(true);
   const [state, setState] = useState<PersistedVault>(EMPTY_VAULT);
-  const [locked, setLocked] = useState(true);
+  const [locked, setLocked] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
@@ -184,6 +184,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     }
 
     setState(next);
+    // Lock only if profile exists AND requireAuthOnLaunch is enabled
     setLocked(Boolean(next.profile) && next.settings.requireAuthOnLaunch);
     setReady(true);
   }, []);

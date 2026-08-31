@@ -2,17 +2,18 @@
  * Anoneurx Identity — local-only profile primitives.
  *
  * Nothing here talks to a network. Credentials are stored only as
- * salted SHA-256 digests so the raw password / pattern never persists.
+ * PBKDF2-HMAC-SHA256 digests (100,000 iterations) so the raw password /
+ * pattern / identity answer never persists.
  */
 
-import { getRandomBytes, bytesToHex } from "./crypto";
+import { getRandomBytes, bytesToHex, deriveKey } from "./crypto";
 
 export type UnlockMethod = "pattern" | "password";
 
 export interface IdentityAnswer {
   id: string;
   question: string;
-  /** Salted digest — the raw answer is never stored. */
+  /** PBKDF2-HMAC-SHA256 salted digest — the raw answer is never stored. */
   answerHash: string;
 }
 
@@ -59,10 +60,24 @@ export function createSalt(): string {
   return bytesToHex(getRandomBytes(16));
 }
 
+/**
+ * Hash a secret using PBKDF2-HMAC-SHA256 with 100,000 iterations.
+ * Falls back to salted SHA-256 if WebCrypto PBKDF2 is unavailable.
+ */
 export async function hashSecret(value: string, salt: string): Promise<string> {
-  const bytes = new TextEncoder().encode(`${salt}:${value.trim().toLowerCase()}`);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return bytesToHex(new Uint8Array(digest));
+  const normalised = value.trim().toLowerCase();
+  try {
+    const saltBytes = new TextEncoder().encode(salt);
+    const key = await deriveKey(normalised, saltBytes, 100_000);
+    const rawKey = await crypto.subtle.exportKey("raw", key);
+    const digest = await crypto.subtle.digest("SHA-256", rawKey);
+    return bytesToHex(new Uint8Array(digest));
+  } catch {
+    // Fallback: salted SHA-256 (compatible with original vault format)
+    const bytes = new TextEncoder().encode(`${salt}:${normalised}`);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return bytesToHex(new Uint8Array(digest));
+  }
 }
 
 export async function verifySecret(

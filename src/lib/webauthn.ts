@@ -62,7 +62,7 @@ export async function registerPasskey(userName: string, displayName: string): Pr
     const credential = (await navigator.credentials.create({
       publicKey: {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
-        rp: { name: "Anoneurx Authenticator", id: window.location.hostname },
+        rp: { name: "Authenticator", id: window.location.hostname },
         user: {
           id: crypto.getRandomValues(new Uint8Array(16)),
           name: userName,

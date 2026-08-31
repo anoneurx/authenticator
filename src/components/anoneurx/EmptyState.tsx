@@ -1,13 +1,11 @@
-import { Plus, DownloadCloud } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "./BrandMark";
 
 export function EmptyState({
   onAdd,
-  onImport,
 }: {
   onAdd: () => void;
-  onImport: () => void;
 }) {
   return (
     <section className="mx-auto flex max-w-md flex-col items-center px-4 py-14 text-center sm:py-20">
@@ -20,13 +18,9 @@ export function EmptyState({
         Add your first account to start generating secure verification codes offline.
       </p>
       <div className="mt-7 flex w-full flex-col gap-2 sm:flex-row sm:justify-center">
-        <Button onClick={onAdd} className="h-11 gap-2">
+        <Button onClick={onAdd} className="h-11 gap-2 px-6">
           <Plus className="h-4 w-4" aria-hidden="true" />
           Add account
-        </Button>
-        <Button onClick={onImport} variant="outline" className="h-11 gap-2">
-          <DownloadCloud className="h-4 w-4" aria-hidden="true" />
-          Import backup
         </Button>
       </div>
       <dl className="mt-8 grid w-full gap-2 text-xs text-muted-foreground">

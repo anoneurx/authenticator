@@ -1,5 +1,4 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { AddAccountModal } from "./AddAccountModal";
@@ -7,12 +6,11 @@ import { LockScreen } from "./LockScreen";
 import { SetupWizard } from "./SetupWizard";
 import { useVault } from "@/store/vault";
 import { enableSystemNotifications } from "@/lib/notify";
-import { BackupPanel } from "./BackupPanel";
+import { Capacitor } from "@capacitor/core";
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { locked, setupComplete, ready } = useVault();
+  const { locked, setupComplete, ready, lock } = useVault();
   const [addAccountOpen, setAddAccountOpen] = useState(false);
-  const [showBackupImport, setShowBackupImport] = useState(false);
 
   // ── Ask for notification permission right after the app is installed ──
   useEffect(() => {
@@ -23,28 +21,40 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("appinstalled", onInstalled);
   }, []);
 
-  // ── Close the backup-import overlay on hardware back / Escape ──
+  // ── Lock vault when app goes to background (native only) ──
   useEffect(() => {
-    if (!showBackupImport) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setShowBackupImport(false);
+    if (!Capacitor.isNativePlatform()) return;
+    let cancelled = false;
+
+    async function watch() {
+      const { App } = await import("@capacitor/app");
+      const handler = App.addListener("appStateChange", ({ isActive }) => {
+        if (!isActive && !cancelled) {
+          lock();
+        }
+      });
+      return handler;
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [showBackupImport]);
+
+    const p = watch();
+    return () => {
+      cancelled = true;
+      p.then((h) => h.remove());
+    };
+  }, [lock]);
+
+  // ── Wait for vault to load before deciding what to show ──
+  if (!ready) return null;
 
   // ── First-run: profile not yet created ────────────────────────────────────
-  if (ready && !setupComplete) {
+  if (!setupComplete) {
     return <SetupWizard />;
   }
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
-      {/* Desktop Sidebar */}
-      <Sidebar />
-
       {/* Main Container */}
-      <div className="flex flex-1 flex-col min-w-0 pb-16 md:pb-0">
+      <div className="flex flex-1 flex-col min-w-0 pb-16">
         <TopBar onAddAccount={() => setAddAccountOpen(true)} />
 
         <main className="flex-1 px-4 py-6 sm:px-6 md:px-8 max-w-7xl w-full mx-auto">
@@ -57,25 +67,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Global Add Account Modal */}
       <AddAccountModal open={addAccountOpen} onOpenChange={setAddAccountOpen} />
-
-      {/* Backup Import (triggered from LockScreen restore) */}
-        {showBackupImport && !locked && (
-          <div
-            data-custom-overlay="open"
-            className="fixed inset-0 z-50 bg-background animate-in fade-in duration-200"
-          >
-          <div className="max-w-4xl mx-auto p-4 sm:p-6">
-            <button
-              type="button"
-              onClick={() => setShowBackupImport(false)}
-              className="mb-4 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              &larr; Back to app
-            </button>
-            <BackupPanel />
-          </div>
-        </div>
-      )}
 
       {/* Lock Screen Overlay */}
       {locked && <LockScreen />}
