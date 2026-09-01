@@ -124,7 +124,7 @@ export function AboutScreen({ onClose }: AboutScreenProps) {
 
           {/* Learn More Card */}
           <a
-            href="https://opensource.anoneurx.com/authenticator"
+            href="https://anoneurx.com/opensource/authenticator"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-between rounded-2xl border border-border/60 bg-card/40 backdrop-blur-md p-4 transition-all hover:bg-muted/50 active:scale-[0.99] shadow-xs"

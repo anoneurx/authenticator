@@ -268,7 +268,7 @@ export function RestoreWizard({ onCancel, onSuccess }: RestoreWizardProps) {
               >
                 <input
                   type="file"
-                  accept=".aax,.json"
+                  accept=".aax,.json,application/json,application/octet-stream,*/*"
                   onChange={handleFileInput}
                   className="absolute inset-0 opacity-0 cursor-pointer"
                 />
