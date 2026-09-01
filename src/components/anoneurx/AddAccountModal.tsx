@@ -16,6 +16,7 @@ import { ManualAccountForm } from "./ManualAccountForm";
 import { ServiceIcon } from "./ServiceIcon";
 import { useVault, type NewAccountInput } from "@/store/vault";
 import { parseOtpAuthUri } from "@/lib/totp";
+import { registerPasskey } from "@/lib/webauthn";
 import { toast } from "@/lib/notify";
 
 export function AddAccountModal({
@@ -33,6 +34,10 @@ export function AddAccountModal({
   const [pendingAccount, setPendingAccount] = useState<NewAccountInput | null>(null);
   const [selectedLabel, setSelectedLabel] = useState<"Personal" | "Work" | "Custom">("Personal");
   const [customLabelText, setCustomLabelText] = useState("");
+
+  // Passkey confirmation step
+  const [passkeyPending, setPasskeyPending] = useState<boolean | null>(null);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
 
   function handleQrScan(uri: string) {
     if (!uri || !uri.trim()) {
@@ -67,25 +72,47 @@ export function AddAccountModal({
     );
   }
 
-  function handleConfirmSave() {
+  async function handleConfirmSave() {
     if (!pendingAccount) return;
     const finalLabel =
       selectedLabel === "Custom" ? customLabelText.trim() || "Account" : selectedLabel;
 
     try {
-      const newAcc = addAccount({
-        ...pendingAccount,
-        label: finalLabel,
-      });
-      toast.success("Account Added to Vault", {
-        description: `${newAcc.issuer} (${newAcc.account}) tagged as '${finalLabel}' is now active on your dashboard.`,
-      });
-      setPendingAccount(null);
-      onOpenChange(false);
+      // Step: Register passkey confirmation
+      setPasskeyPending(true);
+      setPasskeyError(null);
+      const passkeySuccess = await registerPasskey(pendingAccount.issuer || "User", pendingAccount.issuer || "Authenticator");
+      setPasskeyPending(false);
+
+      if (!passkeySuccess) {
+        setPasskeyError("Passkey registration failed. Please try again.");
+        return;
+      }
+
+      // Get the passkey credential ID that was just registered
+      const credKey = "anoneurx.passkey.credentialId";
+      const passkeyId =
+        typeof window !== "undefined" ? window.localStorage.getItem(credKey) : null;
+
+      try {
+        const newAcc = addAccount({
+          ...pendingAccount,
+          label: finalLabel,
+          ...(passkeyId ? { passkeyId } : {}),
+        });
+        toast.success("Account Added to Vault", {
+          description: `${newAcc.issuer} (${newAcc.account}) tagged as '${finalLabel}' is now active on your dashboard.`,
+        });
+        setPendingAccount(null);
+        onOpenChange(false);
+      } catch {
+        toast.error("Failed to add account", {
+          description: "An error occurred while saving to your local vault.",
+        });
+      }
     } catch {
-      toast.error("Failed to add account", {
-        description: "An error occurred while saving to your local vault.",
-      });
+      setPasskeyPending(false);
+      setPasskeyError("An unexpected error occurred during passkey registration.");
     }
   }
 

@@ -9,6 +9,16 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 export default defineConfig({
   vite: {
     base: './',
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes("node_modules/simple-icons")) return "simple-icons";
+            if (id.includes("node_modules/jsqr")) return "jsqr";
+          },
+        },
+      },
+    },
   },
   tanstackStart: {
     server: { entry: "server" },

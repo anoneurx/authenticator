@@ -8,7 +8,7 @@
 
 import { getRandomBytes, bytesToHex, deriveKey } from "./crypto";
 
-export type UnlockMethod = "pattern" | "password";
+export type UnlockMethod = "pattern" | "password" | "biometric";
 
 export interface IdentityAnswer {
   id: string;
@@ -28,7 +28,11 @@ export interface VaultProfile {
   createdAt: number;
 }
 
-export const IDENTITY_QUESTIONS: { id: string; question: string; placeholder: string }[] = [
+export const IDENTITY_QUESTIONS: {
+  id: string;
+  question: string;
+  placeholder: string;
+}[] = [
   {
     id: "childhood-street",
     question: "What was the name of the street you lived on as a child?",
@@ -94,7 +98,10 @@ export function serialisePattern(nodes: number[]): string {
   return nodes.join("-");
 }
 
-export function passwordStrength(password: string): { score: number; label: string } {
+export function passwordStrength(password: string): {
+  score: number;
+  label: string;
+} {
   let score = 0;
   if (password.length >= 8) score++;
   if (password.length >= 12) score++;

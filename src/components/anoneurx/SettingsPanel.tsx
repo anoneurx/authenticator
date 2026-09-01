@@ -39,9 +39,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useVault } from "@/store/vault";
-import { AUTO_LOCK_LABELS, type AutoLockDelay, type ThemePreference } from "@/lib/vault-types";
+import {
+  AUTO_LOCK_LABELS,
+  type AutoLockDelay,
+  type ThemePreference,
+} from "@/lib/vault-types";
 import { BACKUP_FILENAME, createBackupPayloadAsync } from "@/lib/vault-storage";
-import { verifySecret, hashSecret, createSalt, passwordStrength } from "@/lib/identity";
+import {
+  verifySecret,
+  hashSecret,
+  createSalt,
+  passwordStrength,
+  type UnlockMethod,
+} from "@/lib/identity";
+import { biometricAvailability, authenticateBiometric } from "@/lib/biometric";
 import {
   disableSystemNotifications,
   enableSystemNotifications,
@@ -53,10 +64,99 @@ import { BrandMark } from "./BrandMark";
 import { AboutScreen } from "./AboutScreen";
 import { Link } from "@tanstack/react-router";
 import { toast } from "@/lib/notify";
+import { Capacitor } from "@capacitor/core";
+
+async function saveBackupNative(
+  payload: string,
+  filename: string,
+): Promise<{ saved: boolean; location?: string }> {
+  if (!Capacitor.isNativePlatform()) return { saved: false };
+  try {
+    const { Filesystem, Directory, Encoding } =
+      await import("@capacitor/filesystem");
+
+    // Request filesystem permissions first (required on Android 9 and below)
+    try {
+      await Filesystem.requestPermissions();
+    } catch {
+      /* permission API may not exist on all platforms */
+    }
+
+    const folder = "Authenticator";
+
+    // Try directories in order of user-accessibility
+    const dirCandidates: {
+      dir: (typeof Directory)[keyof typeof Directory];
+      label: string;
+    }[] = [
+      { dir: Directory.ExternalStorage, label: "ExternalStorage" },
+      { dir: Directory.Documents, label: "Documents" },
+      { dir: Directory.Data, label: "Data" },
+    ];
+
+    for (const { dir, label } of dirCandidates) {
+      try {
+        try {
+          await Filesystem.mkdir({
+            path: folder,
+            directory: dir,
+            recursive: true,
+          });
+        } catch {
+          /* already exists */
+        }
+
+        await Filesystem.writeFile({
+          path: `${folder}/${filename}`,
+          data: payload,
+          directory: dir,
+          encoding: Encoding.UTF8,
+        });
+
+        const locationMap: Record<string, string> = {
+          ExternalStorage: `Storage/${folder}/${filename}`,
+          Documents: `Documents/${folder}/${filename}`,
+          Data: `App Data/${folder}/${filename}`,
+        };
+        return {
+          saved: true,
+          location: locationMap[label] ?? `${label}/${folder}/${filename}`,
+        };
+      } catch {
+        // Try next directory
+        continue;
+      }
+    }
+
+    return { saved: false };
+  } catch {
+    return { saved: false };
+  }
+}
+
+function downloadBlobWeb(payload: string, filename: string) {
+  const blob = new Blob([payload], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 export function SettingsPanel() {
-  const { settings, updateSettings, accounts, backup, profile, recordBackup, deleteVaultProfile } =
-    useVault();
+  const {
+    settings,
+    updateSettings,
+    accounts,
+    backup,
+    profile,
+    recordBackup,
+    deleteVaultProfile,
+    setUnlockMethods,
+  } = useVault();
   const [activeInfoModal, setActiveInfoModal] = useState<
     "privacy" | "security" | "opensource" | null
   >(null);
@@ -89,24 +189,29 @@ export function SettingsPanel() {
         { accounts, settings, backup, profile: null },
         exportPassword,
       );
-      const blob = new Blob([payload], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = BACKUP_FILENAME;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+
+      if (Capacitor.isNativePlatform()) {
+        const result = await saveBackupNative(payload, BACKUP_FILENAME);
+        if (result.saved) {
+          toast.success("Encrypted backup saved", {
+            description: `Saved to ${result.location ?? "device storage"}`,
+          });
+        } else {
+          setExportError("Could not save backup file. Please try again.");
+          return;
+        }
+      } else {
+        downloadBlobWeb(payload, BACKUP_FILENAME);
+        toast.success("Encrypted backup downloaded", {
+          description: `Saved as ${BACKUP_FILENAME}. Keep it somewhere safe.`,
+        });
+      }
 
       recordBackup(BACKUP_FILENAME);
       setExportError("");
       setExportOpen(false);
       setExportPassword("");
       setExportConfirm("");
-      toast.success("Encrypted backup downloaded", {
-        description: `Saved as ${BACKUP_FILENAME}. Keep it somewhere safe.`,
-      });
     } catch {
       setExportError("Could not create the backup file. Please try again.");
     } finally {
@@ -124,8 +229,61 @@ export function SettingsPanel() {
   const [changePassBusy, setChangePassBusy] = useState(false);
   const [changePassDone, setChangePassDone] = useState(false);
 
+  // ── Biometric unlock ──────────────────────────────────────────────────────
+  const [biometricBusy, setBiometricBusy] = useState(false);
+
+  async function handleToggleBiometric(checked: boolean) {
+    if (biometricBusy) return;
+    if (!checked) {
+      updateSettings({ biometricUnlock: false });
+      updateProfileUnlock(false);
+      toast.success("Biometric unlock disabled", {
+        description: "You'll use your master password to unlock the vault.",
+      });
+      return;
+    }
+
+    setBiometricBusy(true);
+    try {
+      const bio = await biometricAvailability();
+      if (!bio.available) {
+        toast.error("Biometrics not available", {
+          description:
+            "This device has no enrolled fingerprint, face or iris. Set one up in your system settings.",
+        });
+        return;
+      }
+      const confirmed = await authenticateBiometric(
+        "Confirm your biometric / device passkey to enable biometric unlock",
+      );
+      if (!confirmed) {
+        toast.error("Biometric unlock not enabled", {
+          description: "Confirmation was canceled or failed.",
+        });
+        return;
+      }
+      updateSettings({ biometricUnlock: true });
+      updateProfileUnlock(true);
+      toast.success("Biometric unlock enabled", {
+        description:
+          "Confirm your fingerprint, Face ID or passkey when the vault asks to unlock.",
+      });
+    } finally {
+      setBiometricBusy(false);
+    }
+  }
+
+  function updateProfileUnlock(enable: boolean) {
+    const existing = profile?.enabledUnlock ?? ([] as UnlockMethod[]);
+    const next = existing.filter((m) => m !== "biometric") as UnlockMethod[];
+    if (enable) next.push("biometric");
+    setUnlockMethods(next);
+  }
+
   // ── System notifications (device notification center) ───────────────────
-  const [sysNotifOn, setSysNotifOn] = useState(() => systemNotificationsActive());
+  const [sysNotifOn, setSysNotifOn] = useState(() =>
+    systemNotificationsActive(),
+  );
   const permission = getNotificationPermission();
   const notifHint = !systemNotificationsSupported()
     ? "Not supported in this browser — in-app alerts will be used."
@@ -145,7 +303,8 @@ export function SettingsPanel() {
         });
       } else {
         toast.error("Couldn't enable system notifications", {
-          description: "Permission was blocked. Allow it in your browser settings and retry.",
+          description:
+            "Permission was blocked. Allow it in your browser settings and retry.",
         });
       }
     } else {
@@ -157,7 +316,9 @@ export function SettingsPanel() {
 
   // ── Delete account flow ──────────────────────────────────────────────────
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteStep, setDeleteStep] = useState<"password" | "backup">("password");
+  const [deleteStep, setDeleteStep] = useState<"password" | "backup">(
+    "password",
+  );
   const [deletePassword, setDeletePassword] = useState("");
   const [showDeletePass, setShowDeletePass] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -186,7 +347,11 @@ export function SettingsPanel() {
     }
     setDeleteBusy(true);
     try {
-      const ok = await verifySecret(deletePassword, profile.salt, profile.passwordHash);
+      const ok = await verifySecret(
+        deletePassword,
+        profile.salt,
+        profile.passwordHash,
+      );
       if (!ok) {
         setDeleteError("Incorrect master password. Please try again.");
         return;
@@ -217,22 +382,27 @@ export function SettingsPanel() {
         { accounts, settings, backup, profile: null },
         backupPassword,
       );
-      const blob = new Blob([payload], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = BACKUP_FILENAME;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+
+      if (Capacitor.isNativePlatform()) {
+        const result = await saveBackupNative(payload, BACKUP_FILENAME);
+        if (result.saved) {
+          toast.success("Encrypted backup saved", {
+            description: `Saved to ${result.location ?? "device storage"}`,
+          });
+        } else {
+          setDeleteError("Could not save backup file. Please try again.");
+          return;
+        }
+      } else {
+        downloadBlobWeb(payload, BACKUP_FILENAME);
+        toast.success("Encrypted backup downloaded", {
+          description: `Saved as ${BACKUP_FILENAME}. Keep it somewhere safe.`,
+        });
+      }
 
       recordBackup(BACKUP_FILENAME);
       setBackupDownloaded(true);
       setDeleteError("");
-      toast.success("Encrypted backup downloaded", {
-        description: `Saved as ${BACKUP_FILENAME}. Keep it somewhere safe.`,
-      });
     } catch {
       setDeleteError("Could not create the backup file. Please try again.");
     } finally {
@@ -251,7 +421,9 @@ export function SettingsPanel() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
-        <h2 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">Settings</h2>
+        <h2 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+          Settings
+        </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Customize theme, security preferences, and view system information.
         </p>
@@ -269,7 +441,9 @@ export function SettingsPanel() {
             <Label htmlFor="theme-select" className="text-sm font-medium">
               Theme Mode
             </Label>
-            <p className="text-xs text-muted-foreground">Select your preferred visual style.</p>
+            <p className="text-xs text-muted-foreground">
+              Select your preferred visual style.
+            </p>
           </div>
 
           <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-1">
@@ -321,7 +495,6 @@ export function SettingsPanel() {
         </h3>
 
         <div className="space-y-4 pt-1">
-
           {/* Require Authentication on Launch */}
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5 min-w-0">
@@ -348,27 +521,55 @@ export function SettingsPanel() {
 
           <div className="border-t border-border" />
 
+          {/* Biometric unlock */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5 min-w-0">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <Fingerprint className="h-4 w-4 text-muted-foreground" />
+                Biometric Unlock
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {biometricBusy
+                  ? "Confirming with your device prompt…"
+                  : "Unlock with fingerprint, Face ID or device passkey"}
+              </p>
+            </div>
+            <Switch
+              checked={settings.biometricUnlock}
+              disabled={biometricBusy}
+              onCheckedChange={(checked) => void handleToggleBiometric(checked)}
+            />
+          </div>
+
+          <div className="border-t border-border" />
+
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5">
               <Label className="text-sm font-medium flex items-center gap-2">
                 <Lock className="h-4 w-4 text-muted-foreground" />
                 Auto-lock Timeout
               </Label>
-              <p className="text-xs text-muted-foreground">Inactivity period before locking</p>
+              <p className="text-xs text-muted-foreground">
+                Inactivity period before locking
+              </p>
             </div>
             <Select
               value={settings.autoLock}
-              onValueChange={(val) => updateSettings({ autoLock: val as AutoLockDelay })}
+              onValueChange={(val) =>
+                updateSettings({ autoLock: val as AutoLockDelay })
+              }
             >
               <SelectTrigger className="w-36 h-9 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(AUTO_LOCK_LABELS) as AutoLockDelay[]).map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {AUTO_LOCK_LABELS[key]}
-                  </SelectItem>
-                ))}
+                {(Object.keys(AUTO_LOCK_LABELS) as AutoLockDelay[]).map(
+                  (key) => (
+                    <SelectItem key={key} value={key}>
+                      {AUTO_LOCK_LABELS[key]}
+                    </SelectItem>
+                  ),
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -387,7 +588,9 @@ export function SettingsPanel() {
             <Switch
               checked={sysNotifOn}
               disabled={!systemNotificationsSupported()}
-              onCheckedChange={(checked) => void handleToggleSystemNotifications(checked)}
+              onCheckedChange={(checked) =>
+                void handleToggleSystemNotifications(checked)
+              }
             />
           </div>
 
@@ -453,8 +656,8 @@ export function SettingsPanel() {
           <div className="space-y-0.5 min-w-0">
             <Label className="text-sm font-medium">Delete account</Label>
             <p className="text-xs text-muted-foreground">
-              Verify your password, save an encrypted backup, then permanently wipe this vault from
-              the device.
+              Verify your password, save an encrypted backup, then permanently
+              wipe this vault from the device.
             </p>
           </div>
           <Button
@@ -470,25 +673,25 @@ export function SettingsPanel() {
       </div>
 
       {/* Full-screen About overlay */}
-      {showAbout && (
-        <AboutScreen
-          onClose={() => setShowAbout(false)}
-        />
-      )}
+      {showAbout && <AboutScreen onClose={() => setShowAbout(false)} />}
 
       {/* Information Dialogs */}
-      <Dialog open={activeInfoModal !== null} onOpenChange={() => setActiveInfoModal(null)}>
+      <Dialog
+        open={activeInfoModal !== null}
+        onOpenChange={() => setActiveInfoModal(null)}
+      >
         <DialogContent className="sm:max-w-md">
           <div className="text-xs text-muted-foreground space-y-3 py-2 leading-relaxed">
             {activeInfoModal === "privacy" && (
               <>
                 <p>
-                  Authenticator operates entirely on your device. No analytics, tracking
-                  pixels, or third-party telemetries exist in this application.
+                  Authenticator operates entirely on your device. No analytics,
+                  tracking pixels, or third-party telemetries exist in this
+                  application.
                 </p>
                 <p>
-                  Your TOTP secrets never leave local device storage and are never uploaded to any
-                  remote service.
+                  Your TOTP secrets never leave local device storage and are
+                  never uploaded to any remote service.
                 </p>
               </>
             )}
@@ -496,12 +699,13 @@ export function SettingsPanel() {
             {activeInfoModal === "security" && (
               <>
                 <p>
-                  Secrets are stored locally using encrypted key-value storage abstractions. When
-                  exported, backups are sealed using client-side encryption.
+                  Secrets are stored locally using encrypted key-value storage
+                  abstractions. When exported, backups are sealed using
+                  client-side encryption.
                 </p>
                 <p>
-                  This architecture is designed to interface with local security hardware or a Rust
-                  security core.
+                  This architecture is designed to interface with local security
+                  hardware or a Rust security core.
                 </p>
               </>
             )}
@@ -509,12 +713,12 @@ export function SettingsPanel() {
             {activeInfoModal === "opensource" && (
               <>
                 <p>
-                  Authenticator frontend is built with open, inspectable web components
-                  (React, Vite, TypeScript, Tailwind CSS).
+                  Authenticator frontend is built with open, inspectable web
+                  components (React, Vite, TypeScript, Tailwind CSS).
                 </p>
                 <p>
-                  You can inspect all code and verify that zero network fetch calls are made during
-                  application lifecycle.
+                  You can inspect all code and verify that zero network fetch
+                  calls are made during application lifecycle.
                 </p>
               </>
             )}
@@ -541,7 +745,10 @@ export function SettingsPanel() {
                 </DialogDescription>
               </DialogHeader>
 
-              <form onSubmit={(e) => void handleVerifyPassword(e)} className="space-y-4 pt-1">
+              <form
+                onSubmit={(e) => void handleVerifyPassword(e)}
+                className="space-y-4 pt-1"
+              >
                 <div className="space-y-1.5">
                   <Label className="text-xs">Master password</Label>
                   <div className="relative">
@@ -560,7 +767,9 @@ export function SettingsPanel() {
                     <button
                       type="button"
                       onClick={() => setShowDeletePass(!showDeletePass)}
-                      aria-label={showDeletePass ? "Hide password" : "Show password"}
+                      aria-label={
+                        showDeletePass ? "Hide password" : "Show password"
+                      }
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                     >
                       {showDeletePass ? (
@@ -596,7 +805,9 @@ export function SettingsPanel() {
                     disabled={deleteBusy}
                     className="h-9 gap-2 px-4 text-xs"
                   >
-                    {deleteBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {deleteBusy && (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    )}
                     Continue
                   </Button>
                 </div>
@@ -610,8 +821,9 @@ export function SettingsPanel() {
                   Take a backup first
                 </DialogTitle>
                 <DialogDescription>
-                  Deleting removes every code from this device forever. Download an encrypted{" "}
-                  <span className="font-mono">.aax</span> backup so you can restore later.
+                  Deleting removes every code from this device forever. Download
+                  an encrypted <span className="font-mono">.aax</span> backup so
+                  you can restore later.
                 </DialogDescription>
               </DialogHeader>
 
@@ -635,7 +847,9 @@ export function SettingsPanel() {
                         <button
                           type="button"
                           onClick={() => setShowBackupPass(!showBackupPass)}
-                          aria-label={showBackupPass ? "Hide password" : "Show password"}
+                          aria-label={
+                            showBackupPass ? "Hide password" : "Show password"
+                          }
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                         >
                           {showBackupPass ? (
@@ -698,8 +912,8 @@ export function SettingsPanel() {
                         Backup saved as {BACKUP_FILENAME}
                       </p>
                       <p className="text-muted-foreground">
-                        You can import this file from the Backup screen on any device to restore
-                        your codes.
+                        You can import this file from the Backup screen on any
+                        device to restore your codes.
                       </p>
                     </div>
                   </div>
@@ -707,8 +921,9 @@ export function SettingsPanel() {
                   <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3.5 text-xs leading-relaxed text-foreground">
                     <p className="font-semibold">Final warning</p>
                     <p className="mt-1 text-muted-foreground">
-                      This permanently deletes your account and every authenticator entry from this
-                      device. This cannot be undone.
+                      This permanently deletes your account and every
+                      authenticator entry from this device. This cannot be
+                      undone.
                     </p>
                   </div>
 
@@ -747,7 +962,8 @@ export function SettingsPanel() {
               Export Encrypted Backup
             </DialogTitle>
             <DialogDescription>
-              Set a password to encrypt your <span className="font-mono">.aax</span> backup file.
+              Set a password to encrypt your{" "}
+              <span className="font-mono">.aax</span> backup file.
             </DialogDescription>
           </DialogHeader>
 
@@ -770,7 +986,9 @@ export function SettingsPanel() {
                   <button
                     type="button"
                     onClick={() => setShowExportPass(!showExportPass)}
-                    aria-label={showExportPass ? "Hide password" : "Show password"}
+                    aria-label={
+                      showExportPass ? "Hide password" : "Show password"
+                    }
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                   >
                     {showExportPass ? (

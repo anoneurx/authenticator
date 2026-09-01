@@ -36,6 +36,7 @@ export interface NewAccountInput {
   digits: OtpDigits;
   period: number;
   label?: string;
+  passkeyId?: string;
 }
 
 interface VaultContextValue {

@@ -69,7 +69,9 @@
 }
 
 /* Dark-first: :root is the dark theme. */
-:root {
+:root,
+.dark,
+.theme-dark {
   --radius: 0.75rem;
   --background: oklch(0.16 0.006 265);
   --foreground: oklch(0.97 0.002 265);

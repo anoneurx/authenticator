@@ -24,7 +24,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
   return (
     <div
       aria-hidden="true"
-      className="fixed inset-0 z-[200] flex flex-col items-center justify-center pointer-events-none overflow-hidden"
+      className="fixed inset-0 z-[200] flex flex-col items-center justify-center pointer-events-none overflow-hidden dark theme-dark"
       style={{
         transition: "opacity 650ms ease-in-out",
         opacity: phase === "out" ? 0 : 1,

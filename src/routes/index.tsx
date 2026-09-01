@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { AppShell } from "@/components/anoneurx/AppShell";
 import { AccountCard } from "@/components/anoneurx/AccountCard";
 import { EmptyState } from "@/components/anoneurx/EmptyState";
 import { AccountDetailsDialog } from "@/components/anoneurx/AccountDetailsDialog";
-import { AddAccountModal } from "@/components/anoneurx/AddAccountModal";
 import { ConfirmDialog } from "@/components/anoneurx/ConfirmDialog";
 import { useTick } from "@/components/anoneurx/useTick";
 import { useVault } from "@/store/vault";
@@ -14,6 +13,8 @@ import { Button } from "@/components/ui/button";
 
 import { authenticateDeviceLock } from "@/lib/device-lock";
 import { toast } from "@/lib/notify";
+
+const AddAccountModal = lazy(() => import("@/components/anoneurx/AddAccountModal").then(m => ({ default: m.AddAccountModal })));
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -118,10 +119,12 @@ function AuthenticatorScreen() {
       />
 
       {/* Add Account Modal */}
-      <AddAccountModal
-        open={addModalOpen}
-        onOpenChange={setAddModalOpen}
-      />
+      <Suspense fallback={null}>
+        <AddAccountModal
+          open={addModalOpen}
+          onOpenChange={setAddModalOpen}
+        />
+      </Suspense>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

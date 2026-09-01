@@ -198,7 +198,7 @@ export function RestoreWizard({ onCancel, onSuccess }: RestoreWizardProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none overflow-hidden"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 select-none overflow-hidden dark theme-dark"
       style={{
         backgroundImage: `url(${bgImage})`,
         backgroundSize: "cover",

@@ -1,12 +1,13 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, lazy, Suspense, type ReactNode } from "react";
 import { TopBar } from "./TopBar";
 import { MobileBottomNav } from "./MobileBottomNav";
-import { AddAccountModal } from "./AddAccountModal";
 import { LockScreen } from "./LockScreen";
-import { SetupWizard } from "./SetupWizard";
 import { useVault } from "@/store/vault";
 import { enableSystemNotifications } from "@/lib/notify";
 import { Capacitor } from "@capacitor/core";
+
+const AddAccountModal = lazy(() => import("./AddAccountModal").then(m => ({ default: m.AddAccountModal })));
+const SetupWizard = lazy(() => import("./SetupWizard").then(m => ({ default: m.SetupWizard })));
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { locked, setupComplete, ready, lock } = useVault();
@@ -48,7 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // ── First-run: profile not yet created ────────────────────────────────────
   if (!setupComplete) {
-    return <SetupWizard />;
+    return <Suspense fallback={null}><SetupWizard /></Suspense>;
   }
 
   return (
@@ -66,7 +67,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       <MobileBottomNav onAddAccount={() => setAddAccountOpen(true)} />
 
       {/* Global Add Account Modal */}
-      <AddAccountModal open={addAccountOpen} onOpenChange={setAddAccountOpen} />
+      <Suspense fallback={null}>
+        <AddAccountModal open={addAccountOpen} onOpenChange={setAddAccountOpen} />
+      </Suspense>
 
       {/* Lock Screen Overlay */}
       {locked && <LockScreen />}

@@ -19,7 +19,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useVault } from "@/store/vault";
+import { biometricAvailability, authenticateBiometric } from "@/lib/biometric";
 import {
   IDENTITY_QUESTIONS,
   createSalt,
@@ -27,6 +29,7 @@ import {
   passwordStrength,
   type IdentityAnswer,
   type UnlockMethod,
+  type VaultProfile,
 } from "@/lib/identity";
 import { cn } from "@/lib/utils";
 import { toast, enableSystemNotifications } from "@/lib/notify";
@@ -65,8 +68,9 @@ const FEATURES = [
   },
 ];
 
-// Steps: 0-2 features, 3 account choice, 4 identity questions, 5 credentials
-type Step = 0 | 1 | 2 | 3 | 4 | 5;
+// Steps: 0-2 features, 3 account choice, 4 identity questions, 5 credentials,
+// 6 biometric unlock
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 const STRENGTH_BARS = [
   "bg-red-500",
@@ -78,7 +82,7 @@ const STRENGTH_BARS = [
 ];
 
 export function SetupWizard() {
-  const { completeSetup } = useVault();
+  const { completeSetup, updateSettings } = useVault();
   const [step, setStep] = useState<Step>(0);
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [showRestore, setShowRestore] = useState(false);
@@ -93,6 +97,14 @@ export function SetupWizard() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPass, setShowPass] = useState(false);
+
+  // built profile (not committed until the biometric step resolves)
+  const [pendingProfile, setPendingProfile] = useState<VaultProfile | null>(
+    null,
+  );
+  const [biometryName, setBiometryName] = useState("Biometric");
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricBusy, setBiometricBusy] = useState(false);
 
   const [salt] = useState(() => createSalt());
   const [error, setError] = useState("");
@@ -154,7 +166,7 @@ export function SetupWizard() {
         })),
       );
       const enabledUnlock: UnlockMethod[] = ["password"];
-      const profile = {
+      const profile: VaultProfile = {
         username: username.trim(),
         displayName: displayName.trim(),
         passwordHash: await hashSecret(password, salt),
@@ -164,17 +176,67 @@ export function SetupWizard() {
         enabledUnlock,
         createdAt: Date.now(),
       };
-      completeSetup(profile);
+      setPendingProfile(profile);
+
+      const bio = await biometricAvailability();
+      if (bio.available) {
+        setBiometryName(bio.name);
+        setDirection("forward");
+        setStep(6);
+        return;
+      }
+
+      await commitVault(profile, false);
+    } catch (err) {
+      console.error("Vault creation failed:", err);
+      setError("Failed to create vault. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmBiometricToggle(checked: boolean) {
+    if (!checked) {
+      setBiometricEnabled(false);
+      return;
+    }
+    setBiometricBusy(true);
+    const confirmed = await authenticateBiometric(
+      `Confirm your ${biometryName.toLowerCase()} / device passkey to enable biometric unlock`,
+    );
+    setBiometricBusy(false);
+    if (confirmed) {
+      setBiometricEnabled(true);
+      toast.success("Biometric unlock enabled", {
+        description: `Your ${biometryName.toLowerCase()} is now saved to unlock the vault.`,
+      });
+    } else {
+      setBiometricEnabled(false);
+      toast.error("Biometric unlock not enabled", {
+        description:
+          "Confirmation was canceled. You can enable it later from Settings.",
+      });
+    }
+  }
+
+  async function commitVault(profile: VaultProfile, enableBiometric: boolean) {
+    try {
+      const biometricOn = enableBiometric;
+      const finalProfile: VaultProfile = biometricOn
+        ? { ...profile, enabledUnlock: [...profile.enabledUnlock, "biometric"] }
+        : profile;
+      updateSettings({ biometricUnlock: biometricOn });
+      completeSetup(finalProfile);
       toast.success("Vault created", {
-        description: "Use your master password to unlock.",
+        description: biometricOn
+          ? "Use your fingerprint, Face ID or master password to unlock."
+          : "Use your master password to unlock.",
       });
 
       await enableSystemNotifications();
     } catch (err) {
       console.error("Vault creation failed:", err);
       setError("Failed to create vault. Please try again.");
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -193,7 +255,7 @@ export function SetupWizard() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-auto p-4 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-auto p-4 sm:p-6 dark theme-dark">
       {/* Background image */}
       <div
         className="absolute inset-0 bg-cover bg-center"
@@ -229,7 +291,10 @@ export function SetupWizard() {
 
           {/* ── Feature slides (steps 0-2) ── */}
           {isIntro && (
-            <div key={`intro-${step}`} className={cn("my-auto flex flex-col", slideAnim)}>
+            <div
+              key={`intro-${step}`}
+              className={cn("my-auto flex flex-col", slideAnim)}
+            >
               <span
                 className={cn(
                   "mx-auto mb-6 mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wider",
@@ -270,15 +335,21 @@ export function SetupWizard() {
 
           {/* ── Account choice (step 3) ── */}
           {isAccountChoice && (
-            <div key="account-choice" className={cn("my-auto w-full space-y-5 py-2", slideAnim)}>
+            <div
+              key="account-choice"
+              className={cn("my-auto w-full space-y-5 py-2", slideAnim)}
+            >
               <div className="space-y-1.5 text-center">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
                   <Sparkles className="h-3 w-3" />
                   Get started
                 </span>
-                <h2 className="pt-1 text-xl font-bold tracking-tight">Welcome to Authenticator</h2>
+                <h2 className="pt-1 text-xl font-bold tracking-tight">
+                  Welcome to Authenticator
+                </h2>
                 <p className="mx-auto max-w-[300px] text-xs leading-relaxed text-muted-foreground">
-                  Create a brand new vault on this device, or restore a previous vault from a backup file.
+                  Create a brand new vault on this device, or restore a previous
+                  vault from a backup file.
                 </p>
               </div>
 
@@ -293,9 +364,12 @@ export function SetupWizard() {
                     <Plus className="h-6 w-6" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-bold text-foreground">Create a New Account</h3>
+                    <h3 className="text-sm font-bold text-foreground">
+                      Create a New Account
+                    </h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Set up a fresh vault with a new master password and recovery questions.
+                      Set up a fresh vault with a new master password and
+                      recovery questions.
                     </p>
                   </div>
                   <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-colors" />
@@ -311,7 +385,9 @@ export function SetupWizard() {
                     <HardDriveUpload className="h-6 w-6" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-bold text-foreground">Recover Previous Account</h3>
+                    <h3 className="text-sm font-bold text-foreground">
+                      Recover Previous Account
+                    </h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Restore your codes from an encrypted .aax backup file.
                     </p>
@@ -324,9 +400,14 @@ export function SetupWizard() {
 
           {/* ── Identity questions (step 4) ── */}
           {step === 4 && (
-            <div key="identity" className={cn("my-auto w-full space-y-4 py-2", slideAnim)}>
+            <div
+              key="identity"
+              className={cn("my-auto w-full space-y-4 py-2", slideAnim)}
+            >
               <div className="space-y-1.5 text-center">
-                <h2 className="pt-1 text-xl font-bold tracking-tight">Identity questions</h2>
+                <h2 className="pt-1 text-xl font-bold tracking-tight">
+                  Identity questions
+                </h2>
               </div>
 
               {picked.map((q, qi) => (
@@ -340,7 +421,9 @@ export function SetupWizard() {
                   <Input
                     value={answers[q.id] ?? ""}
                     placeholder={q.placeholder}
-                    onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
+                    onChange={(e) =>
+                      setAnswers((a) => ({ ...a, [q.id]: e.target.value }))
+                    }
                     className="h-10 border-border/70 bg-background/40 text-sm transition-shadow focus-visible:shadow-[0_0_0_3px_var(--primary)]/15"
                     autoComplete="off"
                     maxLength={80}
@@ -352,15 +435,21 @@ export function SetupWizard() {
 
           {/* ── Credentials (step 5 — final) ── */}
           {step === 5 && (
-            <div key="credentials" className={cn("my-auto w-full space-y-4 py-2", slideAnim)}>
+            <div
+              key="credentials"
+              className={cn("my-auto w-full space-y-4 py-2", slideAnim)}
+            >
               <div className="space-y-1.5 text-center">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
                   <ShieldCheck className="h-3 w-3" />
                   Almost done
                 </span>
-                <h2 className="pt-1 text-xl font-bold tracking-tight">Create your account</h2>
+                <h2 className="pt-1 text-xl font-bold tracking-tight">
+                  Create your account
+                </h2>
                 <p className="mx-auto max-w-[300px] text-xs leading-relaxed text-muted-foreground">
-                  This account lives only on this device — nobody else can ever see it.
+                  This account lives only on this device — nobody else can ever
+                  see it.
                 </p>
               </div>
 
@@ -411,7 +500,11 @@ export function SetupWizard() {
                     aria-label={showPass ? "Hide password" : "Show password"}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                   >
-                    {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPass ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
                 {password && (
@@ -422,7 +515,9 @@ export function SetupWizard() {
                           key={i}
                           className={cn(
                             "h-1 flex-1 rounded-full transition-all duration-300",
-                            i < strength.score ? STRENGTH_BARS[strength.score] : "bg-muted",
+                            i < strength.score
+                              ? STRENGTH_BARS[strength.score]
+                              : "bg-muted",
                           )}
                         />
                       ))}
@@ -474,6 +569,91 @@ export function SetupWizard() {
             </div>
           )}
 
+          {/* ── Biometric unlock (step 6 — final) ── */}
+          {step === 6 && (
+            <div
+              key="biometric"
+              className={cn("my-auto w-full space-y-5 py-2", slideAnim)}
+            >
+              <div className="space-y-1.5 text-center">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
+                  <Fingerprint className="h-3 w-3" />
+                  One last step
+                </span>
+                <h2 className="pt-1 text-xl font-bold tracking-tight">
+                  Unlock with biometrics?
+                </h2>
+                <p className="mx-auto max-w-[300px] text-xs leading-relaxed text-muted-foreground">
+                  Skip typing your master password. Confirm once with your{" "}
+                  {biometryName} or device passkey, then unlock the vault with a
+                  single touch.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/15 text-primary">
+                    <Fingerprint className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">
+                      {biometryName} / passkey lock
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {biometricBusy
+                        ? "Confirming your biometric…"
+                        : biometricEnabled
+                          ? "Enabled — unlock with a single touch"
+                          : "Ask for biometrics on every unlock"}
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={biometricEnabled}
+                  disabled={biometricBusy}
+                  onCheckedChange={(checked) =>
+                    void confirmBiometricToggle(checked)
+                  }
+                />
+              </div>
+
+              {biometricBusy && (
+                <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Confirm with your {biometryName} or device passkey…
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2 pt-1">
+                <Button
+                  className="h-11 gap-2 bg-gradient-to-r from-primary to-sky-500 font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:shadow-primary/40 hover:brightness-110 active:scale-[0.99]"
+                  disabled={biometricBusy || busy}
+                  onClick={() => {
+                    if (!pendingProfile) return;
+                    setBusy(true);
+                    void commitVault(pendingProfile, biometricEnabled);
+                  }}
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Create my vault
+                </Button>
+                <button
+                  type="button"
+                  disabled={biometricBusy || busy}
+                  onClick={() => {
+                    if (!pendingProfile) return;
+                    setBiometricEnabled(false);
+                    setBusy(true);
+                    void commitVault(pendingProfile, false);
+                  }}
+                  className="w-full text-center text-xs font-medium underline underline-offset-2 transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50"
+                >
+                  Skip for now
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Error banner */}
           {error && (
             <div className="mt-4 flex animate-in items-center justify-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 fade-in duration-200">
@@ -485,8 +665,8 @@ export function SetupWizard() {
           {/* Navigation */}
           <div className="mt-auto pt-6">
             <div className="flex items-center gap-2.5">
-              {/* Main action button — hidden on account choice step (buttons are in the cards) */}
-              {!isAccountChoice && (
+              {/* Main action button — hidden on account choice & biometric steps (buttons are in the step) */}
+              {!isAccountChoice && step !== 6 && (
                 <Button
                   className="h-11 flex-1 gap-2 bg-gradient-to-r from-primary to-sky-500 font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:shadow-primary/40 hover:brightness-110 active:scale-[0.99]"
                   disabled={busy}

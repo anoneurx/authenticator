@@ -11,6 +11,7 @@ export interface VaultAccount {
   digits: OtpDigits;
   period: number;
   createdAt: number;
+  passkeyId?: string;
 }
 
 export type AutoLockDelay = "immediate" | "1m" | "5m" | "15m" | "never";

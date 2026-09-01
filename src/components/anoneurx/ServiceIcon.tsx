@@ -1,6 +1,32 @@
 import { type CSSProperties, type ReactNode } from "react";
 import { getServiceIcon } from "./serviceIcons";
-import * as simpleIcons from "simple-icons";
+import {
+  siProtondrive,
+  siProtonvpn,
+  siInstagram,
+  siX,
+  siPaypal,
+  siZoom,
+  si1password,
+  siLastpass,
+  siNamecheap,
+  siStripe,
+  siOkta,
+  siAuth0,
+  siSap,
+  siSteam,
+  siPerplexity,
+  siClickup,
+  siLinear,
+  siWix,
+  siWise,
+  siOkx,
+  siKucoin,
+  siRoblox,
+  siPlaystation,
+  si2fas,
+  siAccenture,
+} from "simple-icons";
 import metamaskImg from "../../assets/appsicons/metamask.png";
 import xboxImg from "../../assets/appsicons/xbox.png";
 import figmaImg from "../../assets/appsicons/figma.png";
@@ -52,23 +78,38 @@ function isDarkOrWhiteHex(hex: string): boolean {
 }
 
 
-type SimpleIcon = { path: string; hex: string; title: string; slug: string };
+type SimpleIconData = { path: string; hex: string; title: string; slug: string };
 
-const simpleIconBySlug = new Map<string, SimpleIcon>();
-for (const value of Object.values(simpleIcons as Record<string, unknown>)) {
-  if (
-    value &&
-    typeof value === "object" &&
-    typeof (value as SimpleIcon).slug === "string" &&
-    typeof (value as SimpleIcon).path === "string" &&
-    typeof (value as SimpleIcon).hex === "string"
-  ) {
-    simpleIconBySlug.set((value as SimpleIcon).slug, value as SimpleIcon);
-  }
-}
+const slugMap: Record<string, SimpleIconData> = {
+  protondrive: siProtondrive,
+  protonvpn: siProtonvpn,
+  instagram: siInstagram,
+  x: siX,
+  paypal: siPaypal,
+  zoom: siZoom,
+  "1password": si1password,
+  lastpass: siLastpass,
+  namecheap: siNamecheap,
+  stripe: siStripe,
+  okta: siOkta,
+  auth0: siAuth0,
+  sap: siSap,
+  steam: siSteam,
+  perplexity: siPerplexity,
+  clickup: siClickup,
+  linear: siLinear,
+  wix: siWix,
+  wise: siWise,
+  okx: siOkx,
+  kucoin: siKucoin,
+  roblox: siRoblox,
+  playstation: siPlaystation,
+  "2fas": si2fas,
+  accenture: siAccenture,
+};
 
-function getSimpleIcon(slug: string): SimpleIcon | undefined {
-  return simpleIconBySlug.get(slug);
+function getSimpleIcon(slug: string): SimpleIconData | undefined {
+  return slugMap[slug];
 }
 
 function renderFlatIcon(path: string, hex: string, title: string, sz: string) {
