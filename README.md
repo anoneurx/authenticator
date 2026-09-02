@@ -13,9 +13,14 @@ app knows stays on the device.
 - Add accounts manually using a secret key
 - View 6-digit authentication codes with a live countdown ring
 - Search, copy, edit labels, and delete accounts
-- Lock the vault and unlock with device authentication (biometrics / passkey)
-  or an on-device pattern
-- Export and import an encrypted `.aax` backup
+- Lock the vault and unlock with a master password, an on-device pattern, or
+  native device authentication (fingerprint / face / passkey)
+- Native screenshot & screen-recording protection (`FLAG_SECURE`) — screen
+  content never shows in captures or the recents preview
+- Export and import an encrypted `.aax` backup, with a guided in-app recovery
+  wizard that verifies identity answers before restoring
+- Account-choice recovery during first-time setup (new installs can reclaim a
+  previous account via an `.aax` backup)
 - PWA-ready, fully responsive UI
 - Android app via Capacitor (distributed through Google Play)
 
@@ -28,6 +33,8 @@ app knows stays on the device.
 - **Encrypted backups.** `.aax` backups are sealed with
   PBKDF2-HMAC-SHA256 key derivation and AES-256-GCM authenticated encryption.
 - **No telemetry.** There is no analytics SDK and no third-party tracking.
+- **Screenshot protection.** The Android build sets `FLAG_SECURE`, which blocks
+  screenshots, screen recordings, and the app content from the recents preview.
 
 ## Offline-first concept
 
@@ -45,6 +52,7 @@ backup means losing access, by design.
 - Capacitor 8 (Android)
 - WebCrypto API for cryptography
 - WebAuthn for device-bound unlock
+- `@aparajita/capacitor-biometric-auth` for native biometric unlock
 
 ## Project structure
 
